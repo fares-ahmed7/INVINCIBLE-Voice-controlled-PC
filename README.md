@@ -185,5 +185,3 @@ print(execute(cmd))   # "✅ Opening chrome"
 
 - ما ترفعوش الموديل نفسه (Ollama بيخزّنه برّه الريبو).
 - أي جملة الموديل غلط فيها ← ضيفوها في `test_cases.json` في commit لوحده.
-# INVINCIBLE
-# INVINCIBLE
