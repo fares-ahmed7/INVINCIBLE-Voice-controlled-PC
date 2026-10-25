@@ -1,0 +1,396 @@
+[
+ {
+  "text": "افتح كروم",
+  "expected": {
+   "action": "open_app",
+   "app": "chrome"
+  }
+ },
+ {
+  "text": "شغل كروم لو سمحت",
+  "expected": {
+   "action": "open_app",
+   "app": "chrome"
+  }
+ },
+ {
+  "text": "open chrome",
+  "expected": {
+   "action": "open_app",
+   "app": "chrome"
+  }
+ },
+ {
+  "text": "اوبن كروم",
+  "expected": {
+   "action": "open_app",
+   "app": "chrome"
+  }
+ },
+ {
+  "text": "افتح المتصفح",
+  "expected": {
+   "action": "open_app",
+   "app": "firefox"
+  }
+ },
+ {
+  "text": "open firefox",
+  "expected": {
+   "action": "open_app",
+   "app": "firefox"
+  }
+ },
+ {
+  "text": "افتح فايرفوكس",
+  "expected": {
+   "action": "open_app",
+   "app": "firefox"
+  }
+ },
+ {
+  "text": "open the calculator",
+  "expected": {
+   "action": "open_app",
+   "app": "calculator"
+  }
+ },
+ {
+  "text": "افتح الآلة الحاسبة",
+  "expected": {
+   "action": "open_app",
+   "app": "calculator"
+  }
+ },
+ {
+  "text": "شغل الحاسبة",
+  "expected": {
+   "action": "open_app",
+   "app": "calculator"
+  }
+ },
+ {
+  "text": "افتح كالكيوليتور",
+  "expected": {
+   "action": "open_app",
+   "app": "calculator"
+  }
+ },
+ {
+  "text": "افتح التيرمنال",
+  "expected": {
+   "action": "open_app",
+   "app": "terminal"
+  }
+ },
+ {
+  "text": "open terminal",
+  "expected": {
+   "action": "open_app",
+   "app": "terminal"
+  }
+ },
+ {
+  "text": "شغل الترمنال",
+  "expected": {
+   "action": "open_app",
+   "app": "terminal"
+  }
+ },
+ {
+  "text": "افتح الملفات",
+  "expected": {
+   "action": "open_app",
+   "app": "files"
+  }
+ },
+ {
+  "text": "open file manager",
+  "expected": {
+   "action": "open_app",
+   "app": "files"
+  }
+ },
+ {
+  "text": "افتح محرر النصوص",
+  "expected": {
+   "action": "open_app",
+   "app": "text_editor"
+  }
+ },
+ {
+  "text": "open text editor",
+  "expected": {
+   "action": "open_app",
+   "app": "text_editor"
+  }
+ },
+ {
+  "text": "اعمل فولدر اسمه Projects",
+  "expected": {
+   "action": "create_folder",
+   "name": "Projects"
+  }
+ },
+ {
+  "text": "create a folder named Photos",
+  "expected": {
+   "action": "create_folder",
+   "name": "Photos"
+  }
+ },
+ {
+  "text": "انشئ مجلد جديد اسمه تقارير",
+  "expected": {
+   "action": "create_folder",
+   "name": "تقارير"
+  }
+ },
+ {
+  "text": "make folder test",
+  "expected": {
+   "action": "create_folder",
+   "name": "test"
+  }
+ },
+ {
+  "text": "اعمل فولدر باسم Homework",
+  "expected": {
+   "action": "create_folder",
+   "name": "Homework"
+  }
+ },
+ {
+  "text": "افتح فولدر الصور",
+  "expected": {
+   "action": "open_folder"
+  }
+ },
+ {
+  "text": "open downloads folder",
+  "expected": {
+   "action": "open_folder"
+  }
+ },
+ {
+  "text": "افتح مجلد المستندات",
+  "expected": {
+   "action": "open_folder"
+  }
+ },
+ {
+  "text": "open the documents folder",
+  "expected": {
+   "action": "open_folder"
+  }
+ },
+ {
+  "text": "علي الصوت",
+  "expected": {
+   "action": "volume_up"
+  }
+ },
+ {
+  "text": "ارفع الصوت",
+  "expected": {
+   "action": "volume_up"
+  }
+ },
+ {
+  "text": "increase the volume",
+  "expected": {
+   "action": "volume_up"
+  }
+ },
+ {
+  "text": "وطي الصوت",
+  "expected": {
+   "action": "volume_down"
+  }
+ },
+ {
+  "text": "اخفض الصوت",
+  "expected": {
+   "action": "volume_down"
+  }
+ },
+ {
+  "text": "turn the volume down",
+  "expected": {
+   "action": "volume_down"
+  }
+ },
+ {
+  "text": "اكتم الصوت",
+  "expected": {
+   "action": "mute"
+  }
+ },
+ {
+  "text": "mute",
+  "expected": {
+   "action": "mute"
+  }
+ },
+ {
+  "text": "اقفل الجهاز",
+  "expected": {
+   "action": "shutdown"
+  }
+ },
+ {
+  "text": "shut down the computer",
+  "expected": {
+   "action": "shutdown"
+  }
+ },
+ {
+  "text": "ايه الجو النهارده",
+  "expected": {
+   "action": "unknown"
+  }
+ },
+ {
+  "text": "what is the capital of France",
+  "expected": {
+   "action": "unknown"
+  }
+ },
+ {
+  "text": "احكيلي نكتة",
+  "expected": {
+   "action": "unknown"
+  }
+ },
+ {
+  "text": "امسح كل الملفات",
+  "expected": {
+   "action": "unknown"
+  }
+ },
+ {
+  "text": "delete everything in my home folder",
+  "expected": {
+   "action": "unknown"
+  }
+ },
+ {
+  "text": "خلي الشاشة اغمق",
+  "expected": {
+   "action": "unknown"
+  }
+ },
+ {
+  "text": "مرحبا",
+  "expected": {
+   "action": "unknown"
+  }
+ },
+ {
+  "text": "افتح جوجل وابحث عن اخبار الطقس",
+  "expected": {
+   "action": "web_search",
+   "query": "اخبار الطقس",
+   "engine": "google"
+  }
+ },
+ {
+  "text": "ابحث في جوجل عن طريقة عمل الكشري",
+  "expected": {
+   "action": "web_search",
+   "engine": "google"
+  }
+ },
+ {
+  "text": "search google for python tutorial",
+  "expected": {
+   "action": "web_search",
+   "query": "python tutorial"
+  }
+ },
+ {
+  "text": "دور على اغاني عمرو دياب في يوتيوب",
+  "expected": {
+   "action": "web_search",
+   "engine": "youtube"
+  }
+ },
+ {
+  "text": "افتح يوتيوب",
+  "expected": {
+   "action": "open_website",
+   "site": "youtube"
+  }
+ },
+ {
+  "text": "open github",
+  "expected": {
+   "action": "open_website",
+   "site": "github"
+  }
+ },
+ {
+  "text": "افتح فيسبوك",
+  "expected": {
+   "action": "open_website",
+   "site": "facebook"
+  }
+ },
+ {
+  "text": "افتح ديسكورد",
+  "expected": {
+   "action": "open_app",
+   "app": "discord"
+  }
+ },
+ {
+  "text": "open spotify",
+  "expected": {
+   "action": "open_app",
+   "app": "spotify"
+  }
+ },
+ {
+  "text": "افتح فوتوشوب",
+  "expected": {
+   "action": "unknown"
+  }
+ },
+ {
+  "text": "افتح ايدج وابحث عن اخبار الطقس",
+  "expected": {
+   "action": "web_search",
+   "browser": "edge",
+   "query": "اخبار الطقس"
+  }
+ },
+ {
+  "text": "open chrome and search for cats",
+  "expected": {
+   "action": "web_search",
+   "browser": "chrome",
+   "query": "cats"
+  }
+ },
+ {
+  "text": "[ar] اوبن اي جي اند سيرش 2 الطقس || [en] open edge and search to the weather",
+  "expected": {
+   "action": "web_search",
+   "browser": "edge"
+  }
+ },
+ {
+  "text": "[ar] افتح كروم وابحث عن بايثون || [en] a fat chrome and the bath and by thon",
+  "expected": {
+   "action": "web_search",
+   "browser": "chrome"
+  }
+ },
+ {
+  "text": "[ar] اوبن ديسكورد || [en] open discord",
+  "expected": {
+   "action": "open_app",
+   "app": "discord"
+  }
+ }
+]

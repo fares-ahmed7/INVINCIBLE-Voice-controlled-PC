@@ -1,0 +1,6 @@
+ollama
+pydantic
+SpeechRecognition
+sounddevice
+numpy
+pyaudio
