@@ -22,6 +22,7 @@ from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
 
 from ai.app_registry import ResolvedApp, resolve_app
 from ai.apps import BROWSER_NAMES
+from ai.sites import SEARCH_URLS, SITES
 
 log = logging.getLogger(__name__)
 
@@ -147,20 +148,6 @@ def _open_url(url: str, browser: Optional[str] = None) -> str:
 
 
 # ---------- website whitelist: the model never supplies a URL ----------
-SITES = {
-    "google": "https://www.google.com",
-    "youtube": "https://www.youtube.com",
-    "facebook": "https://www.facebook.com",
-    "gmail": "https://mail.google.com",
-    "github": "https://github.com",
-    "whatsapp": "https://web.whatsapp.com",
-    "wikipedia": "https://www.wikipedia.org",
-}
-SEARCH_URLS = {
-    "google": "https://www.google.com/search?q=",
-    "youtube": "https://www.youtube.com/results?search_query=",
-}
-
 KNOWN_FOLDERS = {"pictures", "documents", "downloads", "desktop", "music", "videos"}
 
 
@@ -202,12 +189,11 @@ def _step_volume(delta: int) -> int:
     return _set_volume_percent(_get_volume_percent() + delta)
 
 
-def _toggle_mute() -> bool:
-    """Toggle system mute. Returns True if the system is now muted."""
+def _set_mute(muted: bool) -> bool:
+    """Set system mute to `muted`. Returns the new state."""
     endpoint = _volume_interface()
-    muted = not bool(endpoint.GetMute())
-    endpoint.SetMute(muted, None)
-    return muted
+    endpoint.SetMute(bool(muted), None)
+    return bool(muted)
 
 
 # ---------- dangerous actions (always need confirmation) ----------
@@ -312,13 +298,23 @@ def _handle_set_volume(cmd: dict, confirm: Confirm) -> str:
 
 
 def _handle_mute(cmd: dict, confirm: Confirm) -> str:
-    """Toggle system mute."""
+    """Mute the system."""
     try:
-        muted = _toggle_mute()
+        _set_mute(True)
     except Exception as e:
         log.warning("volume control failed: %s", e)
         return "❌ Volume control unavailable"
-    return "🔇 Muted" if muted else "🔊 Unmuted"
+    return "🔇 Muted"
+
+
+def _handle_unmute(cmd: dict, confirm: Confirm) -> str:
+    """Unmute the system."""
+    try:
+        _set_mute(False)
+    except Exception as e:
+        log.warning("volume control failed: %s", e)
+        return "❌ Volume control unavailable"
+    return "🔊 Unmuted"
 
 
 def _handle_shutdown(cmd: dict, confirm: Confirm) -> str:
@@ -337,6 +333,7 @@ _HANDLERS: dict[str, Handler] = {
     "volume_down": _handle_volume_down,
     "set_volume": _handle_set_volume,
     "mute": _handle_mute,
+    "unmute": _handle_unmute,
     "shutdown": _handle_shutdown,
 }
 

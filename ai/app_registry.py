@@ -97,6 +97,11 @@ def discover_apps() -> dict[str, Path]:
 _ALIASES_NORM = {_normalize(k): v for k, v in ALIASES.items()}
 
 
+def normalize_name(name: str) -> str:
+    """Public helper: lowercase, strip punctuation/extension noise, collapse spaces."""
+    return _normalize(name)
+
+
 def _best_match(query: str, candidates: Iterable[str], cutoff: float = 0.75) -> Optional[str]:
     """Exact match first, then substring (shortest name), then difflib fuzzy match."""
     query = _normalize(query)
@@ -168,4 +173,29 @@ def resolve_app(name: str) -> Optional[ResolvedApp]:
             if resolved:
                 return resolved
 
+    return None
+
+
+def resolve_app_exact(name: str) -> Optional[ResolvedApp]:
+    """Resolve only exact manual names, aliases, or Start Menu names (no fuzzy match).
+
+    Used by the pre-model fast path: "open chrome" must never guess a different app.
+    """
+    safe = sanitize_app_name(name)
+    if not safe:
+        return None
+    norm = _normalize(safe)
+    if not norm:
+        return None
+    discovered = discover_apps()
+
+    for q in _variants(norm):
+        if q in APPS:
+            return _manual(q)
+        if q in _ALIASES_NORM:
+            resolved = _resolve_alias(_ALIASES_NORM[q], discovered)
+            if resolved:
+                return resolved
+        if q in discovered:
+            return _shortcut(q, discovered)
     return None

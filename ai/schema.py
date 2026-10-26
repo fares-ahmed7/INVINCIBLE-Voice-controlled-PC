@@ -29,6 +29,7 @@ ActionName = Literal[
     "volume_down",
     "set_volume",
     "mute",
+    "unmute",
     "shutdown",
     "unknown",
 ]

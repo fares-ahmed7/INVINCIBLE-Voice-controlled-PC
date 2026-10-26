@@ -15,6 +15,7 @@ APPS = {
     "terminal":     ("cmd.exe",        "command prompt"),
     "files":        ("explorer.exe",   "file explorer"),
     "text_editor":  ("notepad.exe",    "notepad"),
+    "notepad":      ("notepad.exe",    "notepad"),
     "paint":        ("mspaint.exe",    "paint"),
     "task_manager": ("taskmgr.exe",    "task manager"),
     "settings":     ("ms-settings:",   "settings"),
