@@ -1,4 +1,4 @@
-# INVINCIBLE – Voice-controlled PC
+# shawkat – Voice-controlled PC
 
 تحكّم في الكمبيوتر بصوتك (عربي، إنجليزي، أو الاتنين مع بعض).
 بيسمع كلامك، بيفهمه بموديل AI شغال على جهازك، وبينفّذ الأمر **من قائمة أوامر آمنة بس**.
@@ -13,7 +13,7 @@
    ▼  ✅ بيفتح Edge على بحث جوجل
 ```
 
-شغّال على **Windows** و**Linux (Ubuntu)**.
+شغّال على **Windows** بس.
 
 ---
 
@@ -21,25 +21,27 @@
 
 ```powershell
 # 1) ثبّت Ollama:  https://ollama.com/download
-#    Ubuntu:       curl -fsSL https://ollama.com/install.sh | sh
 
 # 2) نزّل الموديل (حوالي 2.5GB، مرة واحدة)
 ollama pull qwen3:4b
 
-# 3) بيئة بايثون
+# 3) بيئة بايثون (Python 3.10+، متجرب على 3.12)
 python -m venv venv
 .\venv\Scripts\Activate.ps1      # Windows PowerShell
 # venv\Scripts\activate.bat      # Windows cmd
-# source venv/bin/activate       # Ubuntu
 pip install -r requirements.txt
 
 # 4) شغّل
 python main.py --voice           # بالصوت (عربي + إنجليزي مع بعض)
 python main.py                   # بالكتابة
 python main.py --voice --debug  # بالصوت + سجل أوقات (STT / AI / تنفيذ) عشان نعرف مين بطي
+python main.py --voice --no-wake        # من غير wake word
+python main.py --max-per-minute 20      # حد الأوامر في الدقيقة (الافتراضي 10، و0 = بلا حد)
 ```
 
 اخرج بقول **exit** أو **خروج** (أو `Ctrl+C`).
+
+> حد الأوامر افتراضيًا 10/دقيقة. غيّره بـ `--max-per-minute` أو `shawkat_MAX_PER_MINUTE` (0 = بلا حد).
 
 > لو PowerShell قالك "running scripts is disabled":
 > `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
@@ -57,12 +59,14 @@ python main.py --voice --debug  # بالصوت + سجل أوقات (STT / AI / �
 | فتح موقع | "افتح يوتيوب"، "open github" |
 | فولدر جديد | "اعمل فولدر اسمه Projects" (بيتعمل على Desktop) |
 | فتح فولدر | "افتح فولدر Downloads" |
-| الصوت | "ارفع الصوت"، "وطّي الصوت"، "اكتم الصوت" |
-| إيقاف الجهاز | "اقفل الجهاز" (بيسألك y/n الأول، وبيقفل بعد 15 ثانية) |
+| الصوت | "ارفع الصوت"، "وطّي الصوت"، "اكتم الصوت"، "شغل الصوت" (unmute)، "خلي الصوت 50" (نسبة دقيقة بالـ pycaw) |
+| إيقاف الجهاز | "اقفل الجهاز" (بيسألك "Are you sure?"؛ في وضع الصوت مفيش رد في 5 ثواني = إلغاء) |
 
-أي حاجة برّه القائمة دي بتطلع `Didn't understand` ومبتتنفذش.
+أي أمر مش مدعوم (سؤال، دردشة، حذف ملفات، سطوع الشاشة...) بيطلع `Didn't understand` ومبتتنفذش.
 
-**التطبيقات المتاحة:** chrome, firefox, edge, calculator, terminal, files, text_editor, paint,
+**التطبيقات:** أول ما البرنامج يشتغل بيعمل Scan لقايمة Start (بتاعتك و All Users) ويلاقي التطبيقات المتثبتة تلقائيًا.
+وفي كمان قايمة Manual Override في `ai/apps.py` فيها اختصارات وأسماء عربية:
+chrome, firefox, edge, calculator, terminal, files, text_editor, notepad, notepad++, paint,
 task_manager, settings, discord, spotify, whatsapp, telegram, vscode, word, excel, powerpoint.
 
 **المواقع المتاحة:** google, youtube, facebook, gmail, github, whatsapp, wikipedia.
@@ -88,8 +92,25 @@ python main.py --voice --mic 1            # اختار ميكروفون
 ```
 
 - محتاج **نت** (الـ STT بتاع Google).
-- لو PyAudio مش متثبت بيستخدم `sounddevice` ويشتغل بوضع "اضغط Enter وتكلم 5 ثواني".
-- Ubuntu: `sudo apt install portaudio19-dev flac` ثم `pip install pyaudio`.
+- محتاج **PyAudio** للميكروفون: `pip install pyaudio`.
+
+### Wake word
+
+في وضع الصوت لازم تبدأ الأمر بكلمة **shawkat** أو **شوكت** (وبيتقبل اختلافات الـ STT زي "invisible"):
+
+```
+🎤 "shawkat افتح كروم"
+📝 افتح كروم
+```
+
+- بتتشال قبل ما تتبعت للموديل.
+- عطّلها بـ `--no-wake` أو `shawkat_WAKE=0`.
+- كلمة الخروج (`exit`/`خروج`) شغالة من غير wake word.
+
+### التأكيد بالصوت
+
+الأوامر الخطرة (زي الإيقاف) بتسألك **"Are you sure?"** وبتستنى رد **yes/no** أو **نعم/لا** حوالي 5 ثواني.
+مفيش رد = إلغاء. في وضع الكتابة نفس السؤال بيتكتب في الـ terminal.
 
 ---
 
@@ -97,12 +118,20 @@ python main.py --voice --mic 1            # اختار ميكروفون
 
 الموديل **مبينفّذش حاجة**، هو بس بيحوّل الكلام لـ JSON. كل حاجة بتتنفّذ جاية من كودنا:
 
-- **Whitelist:** التطبيقات والمواقع والأوامر مكتوبة مسبقًا. أي حاجة برّه القايمة بتتقفل.
+- **Whitelist:** التطبيقات والمواقع والأوامر معروفة مسبقًا (Manual + Start Menu Scan). أي حاجة برّه القايمة بتتقفل.
+- **اسم التطبيق بس:** الموديل بيدّي اسم تطبيق قصير — لو حاول يرجّع Path أو Command أو URL بيتم رفضه. الإطلاق بيحصل على Target من عندنا بس (`os.startfile` على اختصار Start أو Target مسجّل).
 - **الموديل مبيدّيش رابط أبدًا:** بيدّي كلمة البحث أو اسم موقع بس. الدومين (`google.com`/`youtube.com`) ثابت في الكود، والكلمة بتتحوّل لصيغة آمنة (`quote_plus`).
 - **من غير `shell=True`:** الأوامر بتتشغّل كقوائم.
 - **أسماء الفولدرات** بتتنضّف (حروف وأرقام ومسافة و `-` `_` بس).
-- **الإيقاف** بيطلب تأكيد.
+- **الإيقاف** وأي أمر خطر بيطلب تأكيد. في وضع الصوت بتجاوب yes/no خلال 5 ثواني، ومفيش رد = إلغاء.
 - التطبيقات بتتفتح **منفصلة عن الـ terminal**، فمخرجاتها مبتظهرش عندك ولو قفلت البرنامج بتفضل شغالة.
+
+---
+
+## السجلات
+
+كل أمر بيتنفّذ بيتسجل في `logs/shawkat.log`: الوقت، النص الخام، JSON اللي رجع من الموديل، والنتيجة.
+الملف بيلفّ تلقائيًا عند 1MB (3 نسخ احتياطية)، ومجلد `logs/` مش بيتعمل Commit.
 
 ---
 
@@ -111,36 +140,59 @@ python main.py --voice --mic 1            # اختار ميكروفون
 ```
 ai/
   schema.py          # شكل الـ JSON (العقد بين الموديولات) ← اقراه الأول
-  apps.py            # قايمة التطبيقات ← هنا بس بتضيف تطبيق جديد
+  apps.py            # Manual Override: أسماء/اختصارات عربية + Targets خاصة
+  app_registry.py    # Start Menu Scan + التحقق من اسم التطبيق ومطابقته
+  sites.py           # المواقع المسموحة (الدومين ثابت في الكود)
   command_parser.py  # understand_command() + الـ prompt + التحقق من ردّ الموديل
-executor.py          # بينفّذ الأمر فعلًا (Windows + Linux)
+executor.py          # بينفّذ الأمر فعلًا (Windows)
 main.py              # الصوت/الكتابة → AI → التنفيذ  (ده اللي بتشغّله)
 voice_demo.py        # الميكروفون + STT وطباعة النص/الـ JSON بس
 tests/
-  test_cases.json    # جمل الاختبار (عربي/إنجليزي/مخلوط)
-  evaluate.py        # بيقيس الدقة والسرعة
+  test_cases.json    # جمل الاختبار (عربي/إنجليزي/مخلوط/مصري)
+  evaluate.py        # بيقيس الدقة والسرعة (محتاج Ollama)
+  test_unit.py       # اختبارات offline (من غير ميكروفون/Ollama/نت)
 ```
 
 ---
 
 ## إضافة حاجات جديدة
 
-**تطبيق جديد**: سطر واحد في `ai/apps.py`:
+**تطبيق جديد**: مش محتاج تسجّله — البرنامج بيلاقي تطبيقات قايمة Start تلقائيًا.
+
+لو عايز **Override يدوي** (اسم عربي، اختصار، أو Launcher خاص زي Discord)، زوّد سطر في `ai/apps.py`:
 ```python
-#            Windows target      Linux command   Start-Menu keyword
-"notepadpp": ("notepad++",       ["notepad++"],  "notepad++"),
+#          Windows target   Start-Menu keyword
+"obs": ("obs64.exe", "obs studio"),
 ```
 الـ target بيكون اسم exe مسجّل في Windows، أو رابط زي `discord:`.
-لو فشل، الكود بيدوّر على اختصار بالكلمة دي في قايمة Start.
+ولو عايز اسم عربي أو Alias، زوّده في `ALIASES` في نفس الملف:
+```python
+"او بي اس": "obs",
+```
+لو الـ target فشل، الكود بيدوّر على اختصار بالكلمة دي في قايمة Start.
+Manual Override دايمًا بيكسب قبل الـ Scan.
 
-**موقع جديد**: ضيف الاسم في `SiteName` (`ai/schema.py`) + سطر `open_website` في `SYSTEM_PROMPT` + قاموس `SITES` في `executor.py`.
+**موقع جديد**: ضيف الاسم في `SiteName` (`ai/schema.py`) + سطر `open_website` في `SYSTEM_PROMPT` + قاموس `SITES` في `ai/sites.py`.
 
 **أمر جديد (action)**:
 1. `ai/schema.py` ← ضيفه في `ActionName` (وأي حقل جديد)
 2. `ai/command_parser.py` ← مثال في `SYSTEM_PROMPT` + تحقق من الحقول
-3. `executor.py` ← الـ mapping في `execute()`
+3. `executor.py` ← ضيف الـ handler في قاموس `_HANDLERS`
 4. `tests/test_cases.json` ← جمل اختبار
 5. `python -m tests.evaluate` ← تأكد إن الدقة ما قلّتش
+
+---
+
+## الاختبارات
+
+```powershell
+# اختبارات سريعة Offline (من غير ميكروفون/Ollama/نت)
+pip install -r requirements-dev.txt
+python -m pytest -q
+
+# دقة الموديل (محتاج Ollama شغال + qwen3:4b)
+python -m tests.evaluate
+```
 
 ---
 
@@ -157,9 +209,9 @@ print(execute(cmd))   # "✅ Opening chrome"
 
 - `understand_command` **ما بترميش exception** لو الموديل رجّع حاجة غلط، بترجّع `{"action": "unknown"}`.
 - لو Ollama مش شغال بترمي Exception (اتعامل معاه في الـ UI).
-- غيّر الموديل: `INVINCIBLE_MODEL=qwen3:1.7b` (أخف) أو `qwen3:8b` (أدق في الجمل المخلوطة).
+- غيّر الموديل: `shawkat_MODEL=qwen3:1.7b` (أخف) أو `qwen3:8b` (أدق في الجمل المخلوطة).
 - Ollama على جهاز تاني: `OLLAMA_HOST=http://IP:11434`.
-- في PowerShell: `$env:INVINCIBLE_MODEL="qwen3:8b"`.
+- في PowerShell: `$env:shawkat_MODEL="qwen3:8b"`.
 
 ---
 
@@ -167,8 +219,9 @@ print(execute(cmd))   # "✅ Opening chrome"
 
 | المشكلة | الحل |
 |---|---|
-| `Could not open X` | التطبيق مش متثبت أو مش مسجّل. جرّب تفتحه من `Win + R` بنفس الاسم |
-| الصوت مش بيسمع | `--list-mics` وبعدين `--mic <رقم>`، وتأكد من Privacy → Microphone في Windows |
+| `App not found: X` | التطبيق مش متثبت أو اسمه مختلف. جرّب تفتحه من `Win + R` بنفس الاسم، أو ضيف Alias في `ai/apps.py` |
+| `Could not open X` | التطبيق متسجل بس فشل فتحه. جرّب تفتحه يدويًا، أو ضيف/عدّل الـ Target أو الـ Alias في `ai/apps.py` |
+| الصوت مش بيسمع | `python voice_demo.py --list-mics` وبعدين `--mic <رقم>`، وتأكد من Privacy → Microphone في Windows |
 | `Speech service error` | مفيش نت |
 | الموديل بيفهم غلط | ضيف الجملة في `test_cases.json` ومثال في `SYSTEM_PROMPT`، أو جرّب موديل أكبر |
 | خطأ اتصال بـ Ollama | شغّله: `ollama serve` |
@@ -179,8 +232,7 @@ print(execute(cmd))   # "✅ Opening chrome"
 ## حالة المشروع
 
 - ✅ الفهم (AI)، الصوت المخلوط، وكل الأوامر في الجدول فوق.
-- ⚠️ جزء Linux في الـ Executor مكتوب بس **محتاج تجربة على Ubuntu حقيقي** (الأوامر في `ai/apps.py` عمودها التاني، و`pactl` للصوت).
-- 💡 مقترحات: أمر "اقفل التطبيق"، فتح أي تطبيق متثبت من قايمة Start تلقائيًا.
+- 💡 مقترحات: أمر "اقفل التطبيق".
 
 ## Git
 

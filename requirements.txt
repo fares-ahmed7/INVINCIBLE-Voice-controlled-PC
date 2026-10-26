@@ -1,6 +1,7 @@
-ollama>=0.6.0
-pydantic>=2.7.0
-SpeechRecognition>=3.10.0
-sounddevice>=0.12.0
-numpy>=1.24.0
-pyaudio>=0.2.14
+# Runtime dependencies, pinned to the versions this Windows build was tested with.
+ollama==0.6.3
+pydantic==2.14.1
+SpeechRecognition==3.17.0
+PyAudio==0.2.14
+pycaw==20260927
+comtypes==1.4.17
