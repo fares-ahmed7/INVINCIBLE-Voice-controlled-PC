@@ -14,6 +14,7 @@ import json
 import re
 import sys
 from concurrent.futures import ThreadPoolExecutor
+from typing import Callable, Optional
 
 import speech_recognition as sr
 
@@ -30,8 +31,11 @@ def clean_text(text: str) -> str:
 EXIT_WORDS = {"exit", "quit", "stop", "خروج", "وقف", "اخرج"}
 
 
-def build_listener(lang: str, mic_index):
-    """Build the microphone listener (Google STT via speech_recognition)."""
+def build_listener(lang: str, mic_index: Optional[int]) -> Callable[..., Optional[str]]:
+    """Build the microphone listener (Google STT via speech_recognition).
+
+    Returns listen(timeout=8, phrase_time_limit=5) -> text or None.
+    """
     recognizer = sr.Recognizer()
 
     try:
@@ -44,12 +48,12 @@ def build_listener(lang: str, mic_index):
         print("Calibrating for background noise (1s)... stay quiet")
         recognizer.adjust_for_ambient_noise(source, duration=1)
 
-    def get_audio():
+    def get_audio(timeout: float = 8, phrase_time_limit: float = 5):
         with mic as source:
             print("🎤 Listening... speak now")
             try:
                 # phrase_time_limit ends recognition early so long rambles don't hold the mic
-                return recognizer.listen(source, timeout=8, phrase_time_limit=5)
+                return recognizer.listen(source, timeout=timeout, phrase_time_limit=phrase_time_limit)
             except sr.WaitTimeoutError:
                 return None
 
@@ -62,8 +66,8 @@ def build_listener(lang: str, mic_index):
             print(f"   Speech service error (internet?): {e}")
             return None
 
-    def listen():
-        audio = get_audio()
+    def listen(timeout: float = 8, phrase_time_limit: float = 5) -> Optional[str]:
+        audio = get_audio(timeout, phrase_time_limit)
         if audio is None:
             return None
 

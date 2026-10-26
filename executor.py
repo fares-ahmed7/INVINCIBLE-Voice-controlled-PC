@@ -210,6 +210,20 @@ def _toggle_mute() -> bool:
     return muted
 
 
+# ---------- dangerous actions (always need confirmation) ----------
+DANGEROUS_ACTIONS = {"shutdown"}
+_DANGER_PROMPTS = {"shutdown": "⚠️ Shut down the computer? Are you sure? (y/n): "}
+_YES_WORDS = {
+    "y", "yes", "yeah", "yep", "sure", "ok", "okay", "confirm",
+    "نعم", "أيوه", "ايوه", "ايوة", "أيوة", "تمام", "أكيد", "اكيد", "موافق", "آه", "اه",
+}
+
+
+def _is_yes(answer: str) -> bool:
+    """True only for a clear yes (English or Arabic). Anything else means no."""
+    return (answer or "").strip().lower() in _YES_WORDS
+
+
 # ---------- action handlers ----------
 def _handle_open_app(cmd: dict, confirm: Confirm) -> str:
     """Open an installed app by name (resolved against the whitelist)."""
@@ -308,9 +322,7 @@ def _handle_mute(cmd: dict, confirm: Confirm) -> str:
 
 
 def _handle_shutdown(cmd: dict, confirm: Confirm) -> str:
-    """Ask for confirmation, then shut down in 15 seconds (cancellable)."""
-    if confirm("⚠️ Shut down the computer? (y/n): ").strip().lower() != "y":
-        return "Cancelled"
+    """Shut down in 15 seconds (confirmation happens in execute for dangerous actions)."""
     _spawn(["shutdown", "/s", "/t", "15"])
     return "⏻ Shutting down in 15s (cancel with: shutdown /a)"
 
@@ -336,4 +348,9 @@ def execute(cmd: dict, confirm: Confirm = input) -> str:
     if handler is None:
         log.debug("unsupported action: %r", action)
         return "🤷 Didn't understand / unsupported command"
+    if action in DANGEROUS_ACTIONS:
+        prompt = _DANGER_PROMPTS.get(action, f"⚠️ {action}? Are you sure? (y/n): ")
+        if not _is_yes(confirm(prompt)):
+            log.info("cancelled dangerous action: %s", action)
+            return "Cancelled"
     return handler(cmd, confirm)
