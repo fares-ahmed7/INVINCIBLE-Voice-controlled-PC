@@ -25,12 +25,12 @@ MODEL = os.getenv("INVINCIBLE_MODEL", "qwen3:4b")
 _INVISIBLE = re.compile(r"[\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff\u200b]")
 
 # Trivial commands answered locally (no LLM round-trip -> instant + cheap).
-# Substring matching on the cleaned text; English is lowercased, Arabic is case-free.
+# Phrase matching uses word boundaries (so "commute" does not match "mute").
 UNMUTE_PHRASES = (
     "unmute", "un-mute", "شغل الصوت", "ارجع الصوت", "إلغاء الكتم", "الغاء الكتم", "شغل صوت",
 )
 MUTE_PHRASES = (
-    "اكتم الصوت", "كتم الصوت", "اسكت الصوت", "silence the volume", "mute", "silence",
+    "اكتم الصوت", "كتم الصوت", "اسكت الصوت", "silence the volume", "mute",
 )
 VOLUME_UP_PHRASES = (
     "ارفع الصوت", "علي الصوت", "على الصوت", "ارتفع الصوت", "ارتفع مستوى الصوت", "رفع الصوت",
@@ -58,6 +58,14 @@ _OPEN_RE = re.compile(
 )
 _SEARCH_WORDS = ("search", "find", "ابحث", "بحث", "دور", "دور على")
 _SITE_ALIASES_NORM = {normalize_name(k): v for k, v in SITE_ALIASES.items() if v in SITES}
+
+
+def _has_phrase(text: str, phrases: tuple[str, ...]) -> bool:
+    """Whole-word/phrase match, so substrings inside unrelated words never trigger actions."""
+    return any(
+        re.search(rf"(?<!\w){re.escape(phrase)}(?!\w)", text, re.IGNORECASE)
+        for phrase in phrases
+    )
 
 SYSTEM_PROMPT = """You are the command parser of a voice-controlled Windows PC.
 The user speaks Arabic or English (sometimes mixed). The text comes from speech recognition,
@@ -153,20 +161,28 @@ def _fast_path(text: str) -> Optional[dict]:
     t = _INVISIBLE.sub("", (text or "")).strip()
     low = t.lower()
 
-    match = _SET_VOLUME_RE.search(low)
-    if match:
-        level = int(match.group("level"))
-        if 0 <= level <= 100:
-            return Command(action="set_volume", level=level).model_dump()
+    # Search phrases must never be hijacked by the volume/mute/open fast paths.
+    if any(word in low for word in _SEARCH_WORDS):
+        return None
+
+    # Per-part anchored match so a mixed transcript still gets the instant path,
+    # while "what's the volume 50" is not treated as a command.
+    for part in t.split("||"):
+        part = re.sub(r"^\[(?:ar|en)\]\s*", "", part.strip())
+        match = _SET_VOLUME_RE.match(part.lower())
+        if match:
+            level = int(match.group("level"))
+            if 0 <= level <= 100:
+                return Command(action="set_volume", level=level).model_dump()
 
     # "unmute" contains "mute", so check unmute first
-    if any(p in low for p in UNMUTE_PHRASES):
+    if _has_phrase(low, UNMUTE_PHRASES):
         return Command(action="unmute").model_dump()
-    if any(p in low for p in MUTE_PHRASES):
+    if _has_phrase(low, MUTE_PHRASES):
         return Command(action="mute").model_dump()
-    if any(p in low for p in VOLUME_DOWN_PHRASES):
+    if _has_phrase(low, VOLUME_DOWN_PHRASES):
         return Command(action="volume_down").model_dump()
-    if any(p in low for p in VOLUME_UP_PHRASES):
+    if _has_phrase(low, VOLUME_UP_PHRASES):
         return Command(action="volume_up").model_dump()
 
     return _fast_open(t)

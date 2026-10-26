@@ -68,6 +68,7 @@ class FakeClock:
 ])
 def test_sanitize_rejects_paths_urls_commands(bad):
     assert sanitize_app_name(bad) == ""
+    assert sanitize_app_name(None) == ""
 
 
 @pytest.mark.parametrize("good,expected", [
@@ -131,6 +132,20 @@ def test_shortcut_fuzzy_match(fake_start_menu):
     assert "Visual Studio Code" in resolved.target
 
 
+def test_fuzzy_match_does_not_substitute_different_apps(fake_start_menu):
+    # Whole-string similarity used to match "microsoft word" -> Microsoft Edge.
+    assert resolve_app("microsoft word").name == "word"
+    assert resolve_app("visual studio") is None
+    assert resolve_app("calculator++") is None
+
+
+def test_notepad_plus_plus_is_not_notepad():
+    resolved = resolve_app("notepad++")
+    assert resolved is not None
+    assert resolved.name == "notepad++"
+    assert resolved.name != "notepad"
+
+
 def test_alias_resolves_to_discovered_shortcut(fake_start_menu):
     resolved = resolve_app("فوتوشوب")
     assert resolved is not None
@@ -175,11 +190,15 @@ def test_strip_wake_word(text, expected):
 def test_strip_wake_word_absent_or_only():
     assert strip_wake_word("open chrome") is None
     assert strip_wake_word("invincible") == ""
+    assert strip_wake_word("invincible!") == ""
+    assert strip_wake_word("[en] invincible!") == ""
 
 
 @pytest.mark.parametrize("text,expected", [
     ("exit", True),
     ("خروج", True),
+    ("exit.", True),
+    ("خروج!", True),
     ("invincible exit", False),
     ("open chrome", False),
 ])
@@ -336,6 +355,16 @@ def test_fast_open_known_site():
 
 def test_fast_path_does_not_hijack_search():
     assert parser._fast_path("open google and search for cats") is None
+    assert parser._fast_path("search for volume 50") is None
+    assert parser._fast_path("what's my commute") is None
+    assert parser._fast_path("muted") is None
+    assert parser._fast_path("silence of the lambs") is None
+
+
+def test_fast_set_volume_mixed_transcript():
+    cmd = parser._fast_path("[ar] خلي الصوت 40 || [en] set the volume to 40")
+    assert cmd["action"] == "set_volume"
+    assert cmd["level"] == 40
 
 
 def test_fast_path_skips_model(monkeypatch):
@@ -351,7 +380,7 @@ def test_every_action_has_a_handler():
     assert set(executor._HANDLERS) == set(ActionName.__args__) - {"unknown"}
 
 
-@pytest.mark.parametrize("answer", ["y", "yes", "نعم", "أيوه"])
+@pytest.mark.parametrize("answer", ["y", "yes", "Yes!", "نعم", "أيوه"])
 def test_dangerous_action_confirmed(monkeypatch, answer):
     spawned = []
     monkeypatch.setattr(executor, "_spawn", lambda cmd: spawned.append(cmd))
@@ -365,6 +394,17 @@ def test_dangerous_action_cancelled(monkeypatch, answer):
     spawned = []
     monkeypatch.setattr(executor, "_spawn", lambda cmd: spawned.append(cmd))
     assert executor.execute({"action": "shutdown"}, confirm=lambda question: answer) == "Cancelled"
+    assert spawned == []
+
+
+def test_dangerous_action_cancelled_when_stdin_closes(monkeypatch):
+    spawned = []
+    monkeypatch.setattr(executor, "_spawn", lambda cmd: spawned.append(cmd))
+
+    def closed_stdin(question):
+        raise EOFError
+
+    assert executor.execute({"action": "shutdown"}, confirm=closed_stdin) == "Cancelled"
     assert spawned == []
 
 
@@ -394,6 +434,13 @@ def test_web_search_drops_invalid_browser(monkeypatch):
     executor.execute({"action": "web_search", "query": "cats", "browser": "evil"},
                      confirm=lambda question: "n")
     assert opened[0][1] is None
+
+
+def test_web_search_reports_browser_failure(monkeypatch):
+    monkeypatch.setattr(executor.webbrowser, "open", lambda url: False)
+    result = executor.execute({"action": "web_search", "query": "cats"},
+                              confirm=lambda question: "n")
+    assert "Could not open the browser" in result
 
 
 def test_open_website_whitelist(monkeypatch):
@@ -433,3 +480,4 @@ def test_folder_name_cleaning_blocks_traversal():
     assert executor._clean_name("../evil") == "evil"
     assert executor._clean_name(r"..\evil") == "evil"
     assert executor._clean_name("") == ""
+    assert executor._clean_name(None) == ""

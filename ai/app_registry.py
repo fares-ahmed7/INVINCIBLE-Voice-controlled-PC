@@ -7,14 +7,17 @@ Start Menu .lnk path discovered on this machine. Raw model text is never launche
 """
 from __future__ import annotations
 
+import logging
 import os
 import re
-from difflib import get_close_matches
+from difflib import SequenceMatcher
 from functools import lru_cache
 from pathlib import Path
 from typing import Iterable, NamedTuple, Optional
 
 from .apps import ALIASES, APPS
+
+log = logging.getLogger(__name__)
 
 _INVISIBLE = re.compile(r"[\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff\u200b]")
 
@@ -38,7 +41,9 @@ class ResolvedApp(NamedTuple):
 
 def _normalize(name: str) -> str:
     """Lowercase, drop punctuation/extension noise, collapse spaces (Unicode-safe)."""
-    name = _INVISIBLE.sub("", name or "").strip().lower()
+    if not isinstance(name, str):
+        return ""
+    name = _INVISIBLE.sub("", name).strip().lower()
     name = re.sub(r"\.lnk$", "", name)
     name = re.sub(r"[^\w\s+]", " ", name, flags=re.UNICODE)
     return re.sub(r"\s+", " ", name).strip()
@@ -57,7 +62,9 @@ def sanitize_app_name(name: str) -> str:
 
     The result is only ever used for whitelist lookup - it is never executed.
     """
-    name = _INVISIBLE.sub("", name or "").strip()
+    if not isinstance(name, str):
+        return ""
+    name = _INVISIBLE.sub("", name).strip()
     if not name or len(name) > 60:
         return ""
     lowered = name.lower()
@@ -76,8 +83,11 @@ def _start_menu_dirs() -> list[Path]:
         base = os.environ.get(var)
         if base:
             d = Path(base) / "Microsoft" / "Windows" / "Start Menu" / "Programs"
-            if d.is_dir():
-                dirs.append(d)
+            try:
+                if d.is_dir():
+                    dirs.append(d)
+            except OSError as e:
+                log.warning("could not access %s: %s", d, e)
     return dirs
 
 
@@ -86,7 +96,12 @@ def discover_apps() -> dict[str, Path]:
     """Scan Start Menu shortcuts ONCE. Returns {normalized name -> .lnk path}."""
     found: dict[str, Path] = {}
     for d in _start_menu_dirs():
-        for lnk in d.rglob("*.lnk"):
+        try:
+            shortcuts = list(d.rglob("*.lnk"))
+        except OSError as e:
+            log.warning("could not scan %s: %s", d, e)
+            continue
+        for lnk in shortcuts:
             norm = _normalize(lnk.stem)
             if not norm or any(bad in norm for bad in _EXCLUDED_WORDS):
                 continue
@@ -102,19 +117,49 @@ def normalize_name(name: str) -> str:
     return _normalize(name)
 
 
+def _token_close(query: str, candidate: str, cutoff: float) -> bool:
+    """True if two names differ only by likely typos, token by token.
+
+    Whole-string similarity is not enough: "microsoft word" and "microsoft edge" are
+    superficially similar but different apps. Token counts and token positions must match,
+    and a punctuation-only suffix ("notepad++" vs "notepad") is treated as a different app.
+    """
+    q_tokens = query.split()
+    c_tokens = candidate.split()
+    if len(q_tokens) != len(c_tokens):
+        return False
+    for q_token, c_token in zip(q_tokens, c_tokens):
+        if q_token == c_token:
+            continue
+        if q_token.startswith(c_token) or c_token.startswith(q_token):
+            longer = q_token if q_token.startswith(c_token) else c_token
+            shorter = c_token if q_token.startswith(c_token) else q_token
+            extra = longer[len(shorter):]
+            if extra and not re.search(r"\w", extra):
+                return False
+        if SequenceMatcher(None, q_token, c_token).ratio() < cutoff:
+            return False
+    return True
+
+
 def _best_match(query: str, candidates: Iterable[str], cutoff: float = 0.75) -> Optional[str]:
-    """Exact match first, then substring (shortest name), then difflib fuzzy match."""
+    """Exact match first, then a safe prefix, then token-aware fuzzy match."""
     query = _normalize(query)
     pool = list(candidates)
     if not query or not pool:
         return None
     if query in pool:
         return query
-    subs = [c for c in pool if query in c]
-    if subs:
-        return min(subs, key=len)
-    close = get_close_matches(query, pool, n=1, cutoff=cutoff)
-    return close[0] if close else None
+    # "calc" -> "calculator" is safe only for a single token; multi-token substrings
+    # ("visual studio" -> "visual studio code") would silently substitute another app.
+    if " " not in query and len(query) >= 3:
+        subs = [c for c in pool if query in c]
+        if subs:
+            return min(subs, key=len)
+    close = [c for c in pool if _token_close(query, c, cutoff)]
+    if close:
+        return min(close, key=lambda c: (abs(len(c) - len(query)), len(c)))
+    return None
 
 
 def _manual(app: str) -> ResolvedApp:

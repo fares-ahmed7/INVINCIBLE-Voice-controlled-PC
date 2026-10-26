@@ -40,13 +40,17 @@ def build_listener(lang: str, mic_index: Optional[int]) -> Callable[..., Optiona
 
     try:
         mic = sr.Microphone(device_index=mic_index)
-    except (AttributeError, OSError, ImportError) as e:
+    except (AttributeError, OSError, ImportError, ValueError) as e:
         sys.exit(f"❌ No microphone available ({e}).\n"
                  "Install PyAudio and check Windows Privacy -> Microphone.")
 
-    with mic as source:
-        print("Calibrating for background noise (1s)... stay quiet")
-        recognizer.adjust_for_ambient_noise(source, duration=1)
+    try:
+        with mic as source:
+            print("Calibrating for background noise (1s)... stay quiet")
+            recognizer.adjust_for_ambient_noise(source, duration=1)
+    except (OSError, ValueError) as e:
+        sys.exit(f"❌ Could not open the microphone ({e}).\n"
+                 "Check Windows Privacy -> Microphone and that no other app is using it.")
 
     def get_audio(timeout: float = 8, phrase_time_limit: float = 5):
         with mic as source:
@@ -99,15 +103,16 @@ def main():
         sys.exit(1)
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--lang", default="ar-EG", help="ar-EG, en-US, or mixed")
+    parser.add_argument("--lang", default="ar-EG", choices=("ar-EG", "en-US", "mixed"),
+                        help="ar-EG, en-US, or mixed")
     parser.add_argument("--mic", type=int, default=None, help="microphone number")
     parser.add_argument("--list-mics", action="store_true")
     args = parser.parse_args()
 
     # Windows consoles default to cp1252 -> UTF-8 output for Arabic / emoji
     try:
-        sys.stdout.reconfigure(encoding="utf-8")
-        sys.stderr.reconfigure(encoding="utf-8")
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     except (AttributeError, ValueError):
         pass
 
@@ -115,7 +120,7 @@ def main():
         try:
             for i, name in enumerate(sr.Microphone.list_microphone_names()):
                 print(f"{i}: {name}")
-        except AttributeError:
+        except (AttributeError, OSError):
             sys.exit("PyAudio is not installed, so microphones can't be listed.\n"
                      "Run:  pip install pyaudio")
         return
@@ -123,7 +128,11 @@ def main():
     listen = build_listener(args.lang, args.mic)
 
     print("Loading model...")
-    warmup()
+    try:
+        warmup()
+    except Exception as e:
+        sys.exit(f"❌ Could not load the model: {e}\n"
+                 "   Make sure Ollama is running (ollama serve) and qwen3:4b is pulled.")
     print("Ready. Say 'exit' to quit (Ctrl+C also works).\n")
 
     try:
@@ -133,7 +142,10 @@ def main():
                 continue
             text = clean_text(text)
             print(f"📝 Heard: {text}")
-            parts = [re.sub(r"^\[(ar|en)\]\s*", "", x.strip()).lower() for x in text.split("||")]
+            parts = [
+                re.sub(r"^\[(ar|en)\]\s*", "", x.strip()).strip(" .!?،؟").lower()
+                for x in text.split("||")
+            ]
             if any(x in EXIT_WORDS for x in parts):
                 break
             result = understand_command(text)
@@ -141,7 +153,7 @@ def main():
     except KeyboardInterrupt:
         pass
     except Exception as e:
-        # A single bad command (Ollama down, mic error, ...) must not kill the demo
+        # Stop cleanly with a friendly message instead of a traceback.
         print(f"❌ Failed to run command: {e}")
     print("Bye")
 

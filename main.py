@@ -21,6 +21,11 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Callable, Optional
 
+# Fail with a friendly message before importing Windows-only modules (pycaw/comtypes).
+if sys.platform != "win32":
+    print("❌ INVINCIBLE currently runs on Windows only. Exiting.")
+    raise SystemExit(1)
+
 from ai import understand_command, warmup
 from ai.app_registry import discover_apps
 from executor import execute
@@ -29,6 +34,7 @@ from voice_demo import build_listener
 _INVISIBLE = re.compile(r"[\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff\u200b]")
 
 log = logging.getLogger(__name__)
+_LOGGING_CONFIGURED = False
 
 LOG_DIR = Path(__file__).resolve().parent / "logs"
 LOG_FILE = LOG_DIR / "invincible.log"
@@ -86,10 +92,11 @@ def strip_wake_word(text: str) -> Optional[str]:
                 break
             found = True
             new = re.sub(r"\s+", " ", f"{new[:match.start()]} {new[match.end():]}").strip()
+        new = new.strip(" \t,،.-!?؟")
         if re.fullmatch(r"\[(?:ar|en)\]\s*", new):
             continue                      # the part contained only a tag (+ wake word)
         new = re.sub(r"^(?:hey|hi|ok|okay|يا|هي|أهلا|اهلا)[\s,،.!]+", "", new,
-                     flags=re.IGNORECASE).strip(" \t,،.-")
+                     flags=re.IGNORECASE).strip(" \t,،.-!?؟")
         if new:
             cleaned.append(new)
     if not found:
@@ -99,7 +106,10 @@ def strip_wake_word(text: str) -> Optional[str]:
 
 def is_exit(text: str) -> bool:
     """True if the utterance is a single exit word (works with or without the wake word)."""
-    parts = [re.sub(r"^\[(?:ar|en)\]\s*", "", p.strip()).lower() for p in (text or "").split("||")]
+    parts = [
+        re.sub(r"^\[(?:ar|en)\]\s*", "", p.strip()).strip(" .!?،؟").lower()
+        for p in (text or "").split("||")
+    ]
     return any(p in EXIT_WORDS for p in parts)
 
 
@@ -117,7 +127,12 @@ def make_voice_confirm(listen: Callable[..., Optional[str]]) -> Callable[[str], 
     """Build a confirm(question) callback that listens for ~5s and returns "y" or "n"."""
     def confirm(question: str) -> str:
         print(question)
-        answer = listen(timeout=5, phrase_time_limit=3)
+        try:
+            answer = listen(timeout=5, phrase_time_limit=3)
+        except Exception as e:          # mic/STT failure must cancel, never confirm
+            log.warning("confirmation listening failed: %s", e)
+            print("⚠️ Could not hear the answer — cancelled.")
+            return "n"
         if not answer:
             print("⏱ No answer — cancelled.")
             return "n"
@@ -151,7 +166,10 @@ class RateLimiter:
 
 def setup_logging(debug: bool = False) -> None:
     """Console logging + rotating file logging (logs/invincible.log)."""
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    global _LOGGING_CONFIGURED
+    if _LOGGING_CONFIGURED:
+        return
+
     formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
 
     root = logging.getLogger()
@@ -161,12 +179,18 @@ def setup_logging(debug: bool = False) -> None:
     console.setFormatter(formatter)
     root.addHandler(console)
 
-    file_handler = RotatingFileHandler(LOG_FILE, maxBytes=1_000_000, backupCount=3, encoding="utf-8")
-    file_handler.setFormatter(formatter)
-    root.addHandler(file_handler)
+    try:
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        file_handler = RotatingFileHandler(LOG_FILE, maxBytes=1_000_000, backupCount=3,
+                                           encoding="utf-8")
+        file_handler.setFormatter(formatter)
+        root.addHandler(file_handler)
+    except OSError as e:
+        log.warning("file logging disabled (%s)", e)   # console logging still works
 
     for noisy in ("comtypes", "httpx", "httpcore", "urllib3"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
+    _LOGGING_CONFIGURED = True
 
 
 def _env_int(name: str, default: int) -> int:
@@ -183,7 +207,8 @@ def main() -> None:
 
     p = argparse.ArgumentParser()
     p.add_argument("--voice", action="store_true")
-    p.add_argument("--lang", default="mixed", help="mixed (Arabic+English, default), ar-EG, or en-US")
+    p.add_argument("--lang", default="mixed", choices=("mixed", "ar-EG", "en-US"),
+                   help="mixed (Arabic+English, default), ar-EG, or en-US")
     p.add_argument("--mic", type=int, default=None)
     p.add_argument("--debug", action="store_true", help="verbose logs + STT/LLM/execute timings")
     p.add_argument("--no-wake", action="store_true", help="don't require the 'invincible' wake word (voice mode)")
@@ -193,8 +218,8 @@ def main() -> None:
 
     # Windows consoles default to cp1252 -> UTF-8 output for Arabic / emoji
     try:
-        sys.stdout.reconfigure(encoding="utf-8")
-        sys.stderr.reconfigure(encoding="utf-8")
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     except (AttributeError, ValueError):
         pass
 
@@ -219,9 +244,20 @@ def main() -> None:
     limiter = RateLimiter(args.max_per_minute)
 
     print("Scanning Start Menu...")
-    app_count = len(discover_apps())
+    try:
+        app_count = len(discover_apps())
+    except Exception as e:
+        log.exception("Start Menu scan failed")
+        print(f"⚠️ Could not scan the Start Menu: {e}")
+        app_count = 0
     print("Loading model...")
-    warmup()
+    try:
+        warmup()
+    except Exception as e:
+        log.exception("model warm-up failed")
+        print(f"❌ Could not load the model: {e}")
+        print("   Make sure Ollama is running (ollama serve) and qwen3:4b is pulled.")
+        sys.exit(1)
     if wake_enabled:
         print("Wake word is ON — start each command with 'invincible' / 'إنفينسيبل'.")
     print(f"Ready ({app_count} Start Menu apps). Say/type 'exit' to quit.\n")
@@ -229,9 +265,17 @@ def main() -> None:
     try:
         while True:
             t0 = time.perf_counter()
-            text = listen()
+            try:
+                text = listen()
+            except Exception as e:
+                log.exception("listening failed")
+                print(f"❌ Microphone/STT error: {e}")
+                if args.voice:
+                    time.sleep(1)
+                    continue
+                break
             t1 = time.perf_counter()
-            if not text:
+            if text is None:
                 if args.voice:
                     continue
                 break
@@ -260,6 +304,7 @@ def main() -> None:
                 continue
 
             t2 = time.perf_counter()
+            cmd: Optional[dict] = None
             try:
                 cmd = understand_command(text)
                 print("🤖", json.dumps(cmd, ensure_ascii=False))
@@ -268,7 +313,8 @@ def main() -> None:
                 t4 = time.perf_counter()
             except Exception as e:
                 # A single bad command (Ollama down, mic error, ...) must not kill the assistant
-                log.exception("command failed: raw=%r", heard)
+                log.exception("command failed: raw=%r json=%s", heard,
+                              json.dumps(cmd, ensure_ascii=False) if cmd else "null")
                 print(f"❌ Failed to run command: {e}")
                 continue
             log.info("command: raw=%r text=%r json=%s result=%r",

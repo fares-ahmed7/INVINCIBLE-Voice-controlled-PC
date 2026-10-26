@@ -41,7 +41,11 @@ def main() -> None:
 
     cases = json.loads(CASES.read_text(encoding="utf-8"))
     print("Loading model (warm-up)...")
-    warmup(args.model)
+    try:
+        warmup(args.model)
+    except Exception as e:
+        raise SystemExit(f"❌ Could not load the model: {e}\n"
+                         "   Make sure Ollama is running and the model is pulled.") from e
 
     correct, total_time, failures = 0, 0.0, []
     for case in cases:
@@ -51,7 +55,8 @@ def main() -> None:
         except Exception as e:                    # Ollama down / model error -> count as failure, keep going
             failures.append((case["text"], case["expected"], {"action": "unknown", "_error": str(e)}))
             continue
-        total_time += time.time() - start
+        finally:
+            total_time += time.time() - start
         if matches(result, case["expected"]):
             correct += 1
         else:

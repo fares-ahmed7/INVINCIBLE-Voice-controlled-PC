@@ -36,7 +36,8 @@ def _spawn(cmd: Sequence[str]) -> subprocess.Popen:
     """Start a program fully detached: its output stays out of our terminal,
     and it keeps running if this program exits (or Ctrl+C is pressed). Windows-only build."""
     kwargs = dict(stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    kwargs["creationflags"] = 0x00000008 | 0x00000200  # CREATE_NO_WINDOW | CREATE_NO_CONSOLE
+    # Detached process (no inherited console) + its own process group.
+    kwargs["creationflags"] = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
     kwargs["close_fds"] = True
     return subprocess.Popen(cmd, **kwargs)
 
@@ -49,8 +50,11 @@ def _start_menu_dirs() -> list[Path]:
         base = os.environ.get(var)
         if base:
             d = Path(base) / "Microsoft" / "Windows" / "Start Menu" / "Programs"
-            if d.is_dir():
-                dirs.append(d)
+            try:
+                if d.is_dir():
+                    dirs.append(d)
+            except OSError as e:
+                log.warning("could not access %s: %s", d, e)
     return dirs
 
 
@@ -61,7 +65,12 @@ def _find_shortcut(keyword: str) -> Optional[Path]:
     keyword = keyword.lower()
     best: Optional[Path] = None
     for d in _start_menu_dirs():
-        for lnk in d.rglob("*.lnk"):
+        try:
+            shortcuts = list(d.rglob("*.lnk"))
+        except OSError as e:
+            log.warning("could not scan %s: %s", d, e)
+            continue
+        for lnk in shortcuts:
             stem = lnk.stem.lower()
             if keyword in stem and "uninstall" not in stem:
                 if best is None or len(stem) < len(best.stem):
@@ -143,17 +152,20 @@ def _open_url(url: str, browser: Optional[str] = None) -> str:
         if path:
             _spawn([path, url])      # list, no shell
             return browser
-    webbrowser.open(url)
+    if not webbrowser.open(url):
+        raise RuntimeError("no browser available")
     return "default browser" + (f" ({browser} not found)" if browser else "")
 
 
-# ---------- website whitelist: the model never supplies a URL ----------
+# ---------- folders (names are sanitized; the model never supplies a path) ----------
 KNOWN_FOLDERS = {"pictures", "documents", "downloads", "desktop", "music", "videos"}
 
 
 def _clean_name(name: str) -> str:
     """Letters/digits/space/-/_ only (Arabic letters are allowed)."""
-    name = re.sub(r"[^\w\s\-]", "", name or "", flags=re.UNICODE).strip()
+    if not isinstance(name, str):
+        return ""
+    name = re.sub(r"[^\w\s\-]", "", name, flags=re.UNICODE).strip()
     return name[:50]
 
 
@@ -207,7 +219,9 @@ _YES_WORDS = {
 
 def _is_yes(answer: str) -> bool:
     """True only for a clear yes (English or Arabic). Anything else means no."""
-    return (answer or "").strip().lower() in _YES_WORDS
+    if not isinstance(answer, str):
+        return False
+    return answer.strip().strip(" .!?،؟").lower() in _YES_WORDS
 
 
 # ---------- action handlers ----------
@@ -217,7 +231,12 @@ def _handle_open_app(cmd: dict, confirm: Confirm) -> str:
     resolved = resolve_app(app_name)
     if resolved is None:
         return f"❌ App not found: {app_name}"
-    if not _launch_app(resolved):
+    try:
+        launched = _launch_app(resolved)
+    except OSError as e:          # e.g. Discord's Update.exe disappearing between checks
+        log.warning("launch failed for %s: %s", resolved.name, e)
+        launched = False
+    if not launched:
         return f"❌ Could not open {resolved.name} (is it installed?)"
     return f"✅ Opening {resolved.name}"
 
@@ -229,7 +248,11 @@ def _handle_web_search(cmd: dict, confirm: Confirm) -> str:
         return "❌ Empty search"
     engine = cmd.get("engine") if cmd.get("engine") in SEARCH_URLS else "google"
     browser = cmd.get("browser") if cmd.get("browser") in BROWSER_NAMES else None
-    used = _open_url(SEARCH_URLS[engine] + quote_plus(query), browser)
+    try:
+        used = _open_url(SEARCH_URLS[engine] + quote_plus(query), browser)
+    except Exception as e:          # browser launch problems are reported, not fatal
+        log.warning("could not open browser: %s", e)
+        return "❌ Could not open the browser"
     return f"🔎 Searching {engine} for: {query}  [{used}]"
 
 
@@ -238,7 +261,11 @@ def _handle_open_website(cmd: dict, confirm: Confirm) -> str:
     site = cmd.get("site")
     if site not in SITES:
         return f"❌ Website not allowed: {site}"
-    _open_url(SITES[site])
+    try:
+        _open_url(SITES[site])
+    except Exception as e:
+        log.warning("could not open browser: %s", e)
+        return "❌ Could not open the browser"
     return f"🌐 Opening {site}"
 
 
@@ -249,7 +276,11 @@ def _handle_create_folder(cmd: dict, confirm: Confirm) -> str:
         return "❌ Invalid folder name"
     desktop = Path.home() / "Desktop"
     path = (desktop if desktop.exists() else Path.home()) / name
-    path.mkdir(exist_ok=True)
+    try:
+        path.mkdir(exist_ok=True)
+    except OSError as e:
+        log.warning("could not create folder %s: %s", path, e)
+        return f"❌ Could not create folder: {e}"
     return f"✅ Folder created: {path}"
 
 
@@ -259,9 +290,15 @@ def _handle_open_folder(cmd: dict, confirm: Confirm) -> str:
     if not name:
         return "❌ Invalid folder name"
     path = Path.home() / (name.capitalize() if name.lower() in KNOWN_FOLDERS else name)
+    if not path.is_dir() and name.lower() in KNOWN_FOLDERS:
+        path = Path.home() / name       # localized Windows folder name
     if not path.is_dir():
         return f"❌ Folder not found: {path}"
-    _open_path(path)
+    try:
+        _open_path(path)
+    except OSError as e:
+        log.warning("could not open folder %s: %s", path, e)
+        return f"❌ Could not open folder: {e}"
     return f"✅ Opening {path}"
 
 
@@ -319,7 +356,11 @@ def _handle_unmute(cmd: dict, confirm: Confirm) -> str:
 
 def _handle_shutdown(cmd: dict, confirm: Confirm) -> str:
     """Shut down in 15 seconds (confirmation happens in execute for dangerous actions)."""
-    _spawn(["shutdown", "/s", "/t", "15"])
+    try:
+        _spawn(["shutdown", "/s", "/t", "15"])
+    except OSError as e:
+        log.warning("could not start shutdown: %s", e)
+        return "❌ Could not shut down"
     return "⏻ Shutting down in 15s (cancel with: shutdown /a)"
 
 
@@ -347,7 +388,11 @@ def execute(cmd: dict, confirm: Confirm = input) -> str:
         return "🤷 Didn't understand / unsupported command"
     if action in DANGEROUS_ACTIONS:
         prompt = _DANGER_PROMPTS.get(action, f"⚠️ {action}? Are you sure? (y/n): ")
-        if not _is_yes(confirm(prompt)):
+        try:
+            answer = confirm(prompt)
+        except EOFError:
+            answer = ""                  # stdin closed -> safe default (no)
+        if not _is_yes(answer):
             log.info("cancelled dangerous action: %s", action)
             return "Cancelled"
     return handler(cmd, confirm)

@@ -25,7 +25,7 @@
 # 2) نزّل الموديل (حوالي 2.5GB، مرة واحدة)
 ollama pull qwen3:4b
 
-# 3) بيئة بايثون
+# 3) بيئة بايثون (Python 3.10+، متجرب على 3.12)
 python -m venv venv
 .\venv\Scripts\Activate.ps1      # Windows PowerShell
 # venv\Scripts\activate.bat      # Windows cmd
@@ -40,6 +40,8 @@ python main.py --max-per-minute 20      # حد الأوامر في الدقيق�
 ```
 
 اخرج بقول **exit** أو **خروج** (أو `Ctrl+C`).
+
+> حد الأوامر افتراضيًا 10/دقيقة. غيّره بـ `--max-per-minute` أو `INVINCIBLE_MAX_PER_MINUTE` (0 = بلا حد).
 
 > لو PowerShell قالك "running scripts is disabled":
 > `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
@@ -58,14 +60,14 @@ python main.py --max-per-minute 20      # حد الأوامر في الدقيق�
 | فولدر جديد | "اعمل فولدر اسمه Projects" (بيتعمل على Desktop) |
 | فتح فولدر | "افتح فولدر Downloads" |
 | الصوت | "ارفع الصوت"، "وطّي الصوت"، "اكتم الصوت"، "شغل الصوت" (unmute)، "خلي الصوت 50" (نسبة دقيقة بالـ pycaw) |
-| إيقاف الجهاز | "اقفل الجهاز" (بيسألك "Are you sure?"، ومفيش رد في 5 ثواني = إلغاء) |
+| إيقاف الجهاز | "اقفل الجهاز" (بيسألك "Are you sure?"؛ في وضع الصوت مفيش رد في 5 ثواني = إلغاء) |
 
-أي حاجة برّه القائمة دي بتطلع `Didn't understand` ومبتتنفذش.
+أي أمر مش مدعوم (سؤال، دردشة، حذف ملفات، سطوع الشاشة...) بيطلع `Didn't understand` ومبتتنفذش.
 
 **التطبيقات:** أول ما البرنامج يشتغل بيعمل Scan لقايمة Start (بتاعتك و All Users) ويلاقي التطبيقات المتثبتة تلقائيًا.
 وفي كمان قايمة Manual Override في `ai/apps.py` فيها اختصارات وأسماء عربية:
-chrome, firefox, edge, calculator, terminal, files, text_editor, paint, task_manager,
-settings, discord, spotify, whatsapp, telegram, vscode, word, excel, powerpoint.
+chrome, firefox, edge, calculator, terminal, files, text_editor, notepad, notepad++, paint,
+task_manager, settings, discord, spotify, whatsapp, telegram, vscode, word, excel, powerpoint.
 
 **المواقع المتاحة:** google, youtube, facebook, gmail, github, whatsapp, wikipedia.
 
@@ -159,23 +161,23 @@ tests/
 
 لو عايز **Override يدوي** (اسم عربي، اختصار، أو Launcher خاص زي Discord)، زوّد سطر في `ai/apps.py`:
 ```python
-#            Windows target   Start-Menu keyword
-"notepadpp": ("notepad++.exe", "notepad++"),
+#          Windows target   Start-Menu keyword
+"obs": ("obs64.exe", "obs studio"),
 ```
 الـ target بيكون اسم exe مسجّل في Windows، أو رابط زي `discord:`.
 ولو عايز اسم عربي أو Alias، زوّده في `ALIASES` في نفس الملف:
 ```python
-"نوتباد": "notepad++",
+"او بي اس": "obs",
 ```
 لو الـ target فشل، الكود بيدوّر على اختصار بالكلمة دي في قايمة Start.
 Manual Override دايمًا بيكسب قبل الـ Scan.
 
-**موقع جديد**: ضيف الاسم في `SiteName` (`ai/schema.py`) + سطر `open_website` في `SYSTEM_PROMPT` + قاموس `SITES` في `executor.py`.
+**موقع جديد**: ضيف الاسم في `SiteName` (`ai/schema.py`) + سطر `open_website` في `SYSTEM_PROMPT` + قاموس `SITES` في `ai/sites.py`.
 
 **أمر جديد (action)**:
 1. `ai/schema.py` ← ضيفه في `ActionName` (وأي حقل جديد)
 2. `ai/command_parser.py` ← مثال في `SYSTEM_PROMPT` + تحقق من الحقول
-3. `executor.py` ← الـ mapping في `execute()`
+3. `executor.py` ← ضيف الـ handler في قاموس `_HANDLERS`
 4. `tests/test_cases.json` ← جمل اختبار
 5. `python -m tests.evaluate` ← تأكد إن الدقة ما قلّتش
 
@@ -218,7 +220,8 @@ print(execute(cmd))   # "✅ Opening chrome"
 | المشكلة | الحل |
 |---|---|
 | `App not found: X` | التطبيق مش متثبت أو اسمه مختلف. جرّب تفتحه من `Win + R` بنفس الاسم، أو ضيف Alias في `ai/apps.py` |
-| الصوت مش بيسمع | `--list-mics` وبعدين `--mic <رقم>`، وتأكد من Privacy → Microphone في Windows |
+| `Could not open X` | التطبيق متسجل بس فشل فتحه. جرّب تفتحه يدويًا، أو ضيف/عدّل الـ Target أو الـ Alias في `ai/apps.py` |
+| الصوت مش بيسمع | `python voice_demo.py --list-mics` وبعدين `--mic <رقم>`، وتأكد من Privacy → Microphone في Windows |
 | `Speech service error` | مفيش نت |
 | الموديل بيفهم غلط | ضيف الجملة في `test_cases.json` ومثال في `SYSTEM_PROMPT`، أو جرّب موديل أكبر |
 | خطأ اتصال بـ Ollama | شغّله: `ollama serve` |
