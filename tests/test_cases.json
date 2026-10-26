@@ -392,5 +392,41 @@
    "action": "open_app",
    "app": "discord"
   }
+ },
+ {
+  "text": "",
+  "expected": {
+   "action": "unknown"
+  }
+ },
+ {
+  "text": "turn up the volume",
+  "expected": {
+   "action": "volume_up"
+  }
+ },
+ {
+  "text": "ارتفع الصوت",
+  "expected": {
+   "action": "volume_up"
+  }
+ },
+ {
+  "text": "[ar] ارفع الصوت || [en] raise the volume",
+  "expected": {
+   "action": "volume_up"
+  }
+ },
+ {
+  "text": "كتم الصوت",
+  "expected": {
+   "action": "mute"
+  }
+ },
+ {
+  "text": "decrease the volume",
+  "expected": {
+   "action": "volume_down"
+  }
  }
 ]

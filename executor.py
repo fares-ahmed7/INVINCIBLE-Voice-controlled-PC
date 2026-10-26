@@ -8,8 +8,11 @@ import re
 import subprocess
 import sys
 import webbrowser
+from functools import lru_cache
 from pathlib import Path
 from urllib.parse import quote_plus
+
+from ai.apps import APPS as _APPS, BROWSER_NAMES
 
 IS_WIN = sys.platform.startswith("win")
 
@@ -25,7 +28,6 @@ def _spawn(cmd):
         kwargs["start_new_session"] = True
     return subprocess.Popen(cmd, **kwargs)
 
-from ai.apps import APPS as _APPS
 
 # ---------- launching apps (with real success/failure detection) ----------
 def _start_menu_dirs():
@@ -37,8 +39,10 @@ def _start_menu_dirs():
                 yield d
 
 
+@lru_cache(maxsize=None)
 def _find_shortcut(keyword: str):
     """Search Start Menu shortcuts (.lnk) for a keyword. Shortest name wins (skips 'uninstall')."""
+    # lru_cache: the Start Menu rarely changes, so scan it only ONCE and reuse the result
     keyword = keyword.lower()
     best = None
     for d in _start_menu_dirs():
@@ -85,7 +89,7 @@ def _launch_windows(app: str) -> bool:
             _shell_open(target)
             return True
     else:
-        # 3) registered exe name (chrome, calc.exe, winword ...)
+        # 3) registered exe name (chrome.exe, calc.exe, winword.exe ...)
         try:
             os.startfile(target)
             return True
@@ -212,7 +216,8 @@ def execute(cmd: dict, confirm=input) -> str:
         if not query:
             return "❌ Empty search"
         engine = cmd.get("engine") if cmd.get("engine") in SEARCH_URLS else "google"
-        used = _open_url(SEARCH_URLS[engine] + quote_plus(query), cmd.get("browser"))   # domain fixed, query URL-encoded
+        browser = cmd.get("browser") if cmd.get("browser") in BROWSER_NAMES else None
+        used = _open_url(SEARCH_URLS[engine] + quote_plus(query), browser)   # domain fixed, query URL-encoded
         return f"🔎 Searching {engine} for: {query}  [{used}]"
 
     if action == "open_website":

@@ -36,6 +36,7 @@ pip install -r requirements.txt
 # 4) شغّل
 python main.py --voice           # بالصوت (عربي + إنجليزي مع بعض)
 python main.py                   # بالكتابة
+python main.py --voice --debug  # بالصوت + سجل أوقات (STT / AI / تنفيذ) عشان نعرف مين بطي
 ```
 
 اخرج بقول **exit** أو **خروج** (أو `Ctrl+C`).

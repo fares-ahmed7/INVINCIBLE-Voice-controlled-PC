@@ -39,7 +39,11 @@ def main() -> None:
     correct, total_time, failures = 0, 0.0, []
     for case in cases:
         start = time.time()
-        result = understand_command(case["text"], model=args.model)
+        try:
+            result = understand_command(case["text"], model=args.model)
+        except Exception as e:                    # Ollama down / model error -> count as failure, keep going
+            failures.append((case["text"], case["expected"], {"action": "unknown", "_error": str(e)}))
+            continue
         total_time += time.time() - start
         if matches(result, case["expected"]):
             correct += 1
@@ -53,7 +57,7 @@ def main() -> None:
     if failures:
         print("\nFailures:")
         for text, expected, got in failures:
-            print(f"  - {text!r}\n      expected: {expected}\n      got:      {got}")
+            print(f"  - {json.dumps(text, ensure_ascii=True)}\n      expected: {json.dumps(expected, ensure_ascii=True)}\n      got:      {json.dumps(got, ensure_ascii=True)}")
 
 
 if __name__ == "__main__":

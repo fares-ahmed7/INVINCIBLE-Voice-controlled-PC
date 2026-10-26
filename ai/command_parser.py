@@ -11,6 +11,7 @@ Config (environment variables, all optional):
     OLLAMA_HOST        Ollama server address (default: http://localhost:11434)
 """
 import os
+import re
 from typing import Optional
 
 import ollama
@@ -19,6 +20,20 @@ from .apps import APP_NAMES, BROWSER_NAMES
 from .schema import Command
 
 MODEL = os.getenv("INVINCIBLE_MODEL", "qwen3:4b")
+
+_INVISIBLE = re.compile(r"[\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff\u200b]")
+
+# Trivial commands answered locally (no LLM round-trip -> instant + cheap).
+# Substring matching on the cleaned text; English is lowercased, Arabic is case-free.
+MUTE_PHRASES = ("اكتم الصوت", "كتم الصوت", "silence the volume", "mute", "silence")
+VOLUME_UP_PHRASES = (
+    "ارفع الصوت", "علي الصوت", "ارتفع الصوت", "ارتفع مستوى الصوت", "رفع الصوت", "ارتفاع الصوت",
+    "increase the volume", "turn up the volume", "volume up", "raise the volume", "boost the volume",
+)
+VOLUME_DOWN_PHRASES = (
+    "اخفض الصوت", "خفض الصوت", "وطي الصوت", "تقليل الصوت", "decrease the volume",
+    "turn down the volume", "volume down", "lower the volume",
+)
 
 SYSTEM_PROMPT = """You are the command parser of a voice-controlled Ubuntu system.
 The user speaks Arabic or English (sometimes mixed). The text comes from speech recognition,
@@ -76,6 +91,22 @@ Examples:
 """.replace("{APPS}", ", ".join(APP_NAMES))
 
 
+def _fast_path(text: str):
+    """Answer trivial spoken commands (volume / mute) directly, without calling the LLM.
+
+    Keeps the assistant snappy for the most common commands and adds no new risk.
+    Returns a Command dict, or None if the text isn't a fast-path candidate.
+    """
+    t = _INVISIBLE.sub("", (text or "")).lower()
+    if any(p in t for p in MUTE_PHRASES):
+        return Command(action="mute").model_dump()
+    if any(p in t for p in VOLUME_DOWN_PHRASES):
+        return Command(action="volume_down").model_dump()
+    if any(p in t for p in VOLUME_UP_PHRASES):
+        return Command(action="volume_up").model_dump()
+    return None
+
+
 def _chat(text: str, model: str):
     kwargs = dict(
         model=model,
@@ -84,7 +115,7 @@ def _chat(text: str, model: str):
             {"role": "user", "content": text},
         ],
         format=Command.model_json_schema(),   # forces JSON that matches the schema
-        options={"temperature": 0},
+        options={"temperature": 0, "num_predict": 256},   # JSON-only replies, deterministic, no rambling
         keep_alive="30m",                      # keep the model loaded in RAM
     )
     try:
@@ -98,6 +129,11 @@ def understand_command(text: str, model: Optional[str] = None) -> dict:
     text = (text or "").strip()
     if not text:
         return Command(action="unknown").model_dump()
+
+    fast = _fast_path(text)
+    if fast is not None:
+        # trivial command (volume/mute): skip the LLM completely -> instant
+        return fast
 
     resp = _chat(text, model or MODEL)   # connection errors (Ollama down) propagate on purpose
 
@@ -122,6 +158,9 @@ def understand_command(text: str, model: Optional[str] = None) -> dict:
         cmd = Command(action="unknown")
     if cmd.action in ("create_folder", "open_folder") and not (cmd.name or "").strip():
         cmd = Command(action="unknown")
+    if cmd.action == "shutdown":
+        # shutdown takes no payload: drop anything else the model may have added
+        cmd = Command(action="shutdown")
 
     return cmd.model_dump()
 

@@ -10,10 +10,16 @@ Needs internet for the speech recognition (Google Web Speech API).
 If PyAudio is not installed, it falls back to "press Enter, then speak for 5 seconds"
 using sounddevice.
 """
-import re
 import argparse
 import json
+import re
 import sys
+from concurrent.futures import ThreadPoolExecutor
+
+import speech_recognition as sr
+
+from ai import understand_command, warmup
+
 _INVISIBLE = re.compile(r"[\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff\u200b]")
 
 
@@ -22,12 +28,8 @@ def clean_text(text: str) -> str:
     return _INVISIBLE.sub("", text or "").strip()
 
 
-import speech_recognition as sr
-
-from ai import understand_command, warmup
-
 RECORD_SECONDS = 5
-EXIT_WORDS = {"exit", "quit", "خروج", "وقف"}
+EXIT_WORDS = {"exit", "quit", "stop", "خروج", "وقف", "اخرج"}
 
 
 def build_listener(lang: str, mic_index):
@@ -48,7 +50,8 @@ def build_listener(lang: str, mic_index):
             with mic as source:
                 print("🎤 Listening... speak now")
                 try:
-                    return recognizer.listen(source, timeout=8, phrase_time_limit=8)
+                    # phrase_time_limit ends recognition early so long rambles don't hold the mic
+                    return recognizer.listen(source, timeout=8, phrase_time_limit=5)
                 except sr.WaitTimeoutError:
                     return None
     else:
@@ -85,7 +88,6 @@ def build_listener(lang: str, mic_index):
         if lang == "mixed":
             # Google understands ONE language per request, so send the same audio twice
             # (Arabic + English) in parallel and let the AI model merge the two transcripts.
-            from concurrent.futures import ThreadPoolExecutor
             with ThreadPoolExecutor(max_workers=2) as pool:
                 f_ar = pool.submit(recognize_one, audio, "ar-EG")
                 f_en = pool.submit(recognize_one, audio, "en-US")
@@ -112,6 +114,13 @@ def main():
     parser.add_argument("--list-mics", action="store_true")
     args = parser.parse_args()
 
+    # Windows consoles default to cp1252 -> UTF-8 output for Arabic / emoji
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except (AttributeError, ValueError):
+        pass
+
     if args.list_mics:
         try:
             for i, name in enumerate(sr.Microphone.list_microphone_names()):
@@ -134,12 +143,16 @@ def main():
                 continue
             text = clean_text(text)
             print(f"📝 Heard: {text}")
-            if text.strip().lower() in EXIT_WORDS:
+            parts = [re.sub(r"^\[(ar|en)\]\s*", "", x.strip()).lower() for x in text.split("||")]
+            if any(x in EXIT_WORDS for x in parts):
                 break
             result = understand_command(text)
             print("🤖", json.dumps(result, ensure_ascii=False), "\n")
     except KeyboardInterrupt:
         pass
+    except Exception as e:
+        # A single bad command (Ollama down, mic error, ...) must not kill the demo
+        print(f"❌ Failed to run command: {e}")
     print("Bye")
 
 
