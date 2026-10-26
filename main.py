@@ -6,6 +6,7 @@ Run commands for real.
 """
 import argparse
 import json
+import logging
 import re
 import sys
 import time
@@ -13,8 +14,11 @@ import time
 from ai import understand_command, warmup
 from ai.app_registry import discover_apps
 from executor import execute
+from voice_demo import build_listener
 
 _INVISIBLE = re.compile(r"[\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff\u200b]")
+
+log = logging.getLogger(__name__)
 
 
 def clean_text(text: str) -> str:
@@ -44,8 +48,15 @@ def main():
     except (AttributeError, ValueError):
         pass
 
+    logging.basicConfig(
+        level=logging.DEBUG if args.debug else logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+    logging.getLogger("comtypes").setLevel(logging.WARNING)  # COM internals are very noisy
+    for noisy in ("httpx", "httpcore", "urllib3"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
+
     if args.voice:
-        from voice_demo import build_listener
         listen = build_listener(args.lang, args.mic)
     else:
         def listen():
@@ -89,7 +100,8 @@ def main():
                 continue
             print(result, "\n")
             if args.debug:
-                print(f"⏱ STT: {t1 - t0:.2f}s | LLM: {t3 - t2:.2f}s | Execute: {t4 - t3:.2f}s | Total: {t4 - t0:.2f}s")
+                log.debug("timings: STT %.2fs | LLM %.2fs | Execute %.2fs | Total %.2fs",
+                          t1 - t0, t3 - t2, t4 - t3, t4 - t0)
     except KeyboardInterrupt:
         pass
     print("Bye")

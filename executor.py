@@ -1,21 +1,37 @@
 """
 Executor: turns the AI's JSON command into a real action.
-SAFE by design: only whitelisted actions/apps run. Nothing from the model is ever run as text.
-Windows-only build.
+
+SAFE by design: only whitelisted actions/apps run. Nothing from the model is ever run
+as text or as a shell command. Windows-only build.
 """
+from __future__ import annotations
+
+import logging
 import os
 import re
 import subprocess
 import webbrowser
+from ctypes import POINTER, cast
 from functools import lru_cache
 from pathlib import Path
+from typing import Callable, Optional, Sequence
 from urllib.parse import quote_plus
+
+from comtypes import CLSCTX_ALL
+from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
 
 from ai.app_registry import ResolvedApp, resolve_app
 from ai.apps import BROWSER_NAMES
 
+log = logging.getLogger(__name__)
 
-def _spawn(cmd):
+# A confirmation callback: question -> user answer (input() in the real app, a stub in tests).
+Confirm = Callable[[str], str]
+# Every handler takes the command dict + the confirmation callback and returns a message.
+Handler = Callable[[dict, Confirm], str]
+
+
+def _spawn(cmd: Sequence[str]) -> subprocess.Popen:
     """Start a program fully detached: its output stays out of our terminal,
     and it keeps running if this program exits (or Ctrl+C is pressed). Windows-only build."""
     kwargs = dict(stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -25,21 +41,24 @@ def _spawn(cmd):
 
 
 # ---------- launching apps (with real success/failure detection) ----------
-def _start_menu_dirs():
+def _start_menu_dirs() -> list[Path]:
+    """The user's and the all-users Start Menu folders that exist on this PC."""
+    dirs: list[Path] = []
     for var in ("APPDATA", "PROGRAMDATA"):
         base = os.environ.get(var)
         if base:
             d = Path(base) / "Microsoft" / "Windows" / "Start Menu" / "Programs"
             if d.is_dir():
-                yield d
+                dirs.append(d)
+    return dirs
 
 
 @lru_cache(maxsize=None)
-def _find_shortcut(keyword: str):
+def _find_shortcut(keyword: str) -> Optional[Path]:
     """Search Start Menu shortcuts (.lnk) for a keyword. Shortest name wins (skips 'uninstall')."""
     # lru_cache: the Start Menu rarely changes, so scan it only ONCE and reuse the result
     keyword = keyword.lower()
-    best = None
+    best: Optional[Path] = None
     for d in _start_menu_dirs():
         for lnk in d.rglob("*.lnk"):
             stem = lnk.stem.lower()
@@ -49,7 +68,7 @@ def _find_shortcut(keyword: str):
     return best
 
 
-def _shell_open(target: str):
+def _shell_open(target: str) -> None:
     """Open a URI/shortcut through explorer.exe, so the new app is NOT a child of our terminal
     (nothing it prints can leak here, and Ctrl+C can't kill it)."""
     _spawn(["explorer.exe", target])
@@ -60,11 +79,14 @@ def _launch_app(resolved: ResolvedApp) -> bool:
 
     Only targets that came from OUR whitelist are used - never raw model text.
     """
+    log.debug("launching app %r (%s -> %s)", resolved.name, resolved.kind, resolved.target)
+
     if resolved.kind == "shortcut":
         try:
             os.startfile(resolved.target)   # .lnk path from our Start Menu scan
             return True
-        except OSError:
+        except OSError as e:
+            log.warning("could not open shortcut %s: %s", resolved.target, e)
             return False
 
     # Discord's own launcher (silent, fully detached)
@@ -79,8 +101,8 @@ def _launch_app(resolved: ResolvedApp) -> bool:
     try:
         os.startfile(resolved.target)   # exe name or URI scheme from ai/apps.py
         return True
-    except OSError:
-        pass
+    except OSError as e:
+        log.debug("os.startfile(%r) failed: %s", resolved.target, e)
 
     # Fallback: Start Menu shortcut by keyword
     if resolved.keyword:
@@ -92,7 +114,7 @@ def _launch_app(resolved: ResolvedApp) -> bool:
 
 
 # ---------- browsers ----------
-def _browser_path(browser: str):
+def _browser_path(browser: str) -> Optional[str]:
     """Find a browser executable on Windows. Returns a path string or None."""
     pf = os.environ.get("PROGRAMFILES", r"C:\Program Files")
     pf86 = os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)")
@@ -112,8 +134,9 @@ def _browser_path(browser: str):
     return None
 
 
-def _open_url(url: str, browser=None) -> str:
+def _open_url(url: str, browser: Optional[str] = None) -> str:
     """Open a URL. Returns the name of the browser used."""
+    log.debug("opening url %r with browser=%r", url, browser)
     if browser:
         path = _browser_path(browser)
         if path:
@@ -147,81 +170,170 @@ def _clean_name(name: str) -> str:
     return name[:50]
 
 
-def _open_path(path: Path):
+def _open_path(path: Path) -> None:
+    """Open a folder/file with its default Windows handler."""
     os.startfile(str(path))
 
 
-def _press_volume_key(vk: int, times: int = 5):
-    import ctypes
-    for _ in range(times):
-        ctypes.windll.user32.keybd_event(vk, 0, 0, 0)
-        ctypes.windll.user32.keybd_event(vk, 0, 2, 0)
+# ---------- volume (pycaw: exact Windows master volume) ----------
+def _volume_interface() -> IAudioEndpointVolume:
+    """Return the Windows master-volume endpoint (old and new pycaw APIs)."""
+    device = AudioUtilities.GetSpeakers()
+    if hasattr(device, "EndpointVolume"):          # pycaw 2024+
+        return device.EndpointVolume
+    interface = device.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)  # pycaw 0.6.x
+    return cast(interface, POINTER(IAudioEndpointVolume))
 
 
-def _volume(direction: str):
-    if direction == "mute":
-        _press_volume_key(0xAD, 1)
-    else:
-        _press_volume_key(0xAF if direction == "up" else 0xAE, 5)  # 5 presses ~ 10%
+def _get_volume_percent() -> int:
+    """Current master volume as an integer percentage (0-100)."""
+    return round(_volume_interface().GetMasterVolumeLevelScalar() * 100)
 
 
-def execute(cmd: dict, confirm=input) -> str:
+def _set_volume_percent(level: int) -> int:
+    """Set the master volume to `level` percent (clamped to 0-100). Returns the level set."""
+    level = max(0, min(100, int(level)))
+    _volume_interface().SetMasterVolumeLevelScalar(level / 100.0, None)
+    return level
+
+
+def _step_volume(delta: int) -> int:
+    """Raise/lower the master volume by `delta` percentage points. Returns the new level."""
+    return _set_volume_percent(_get_volume_percent() + delta)
+
+
+def _toggle_mute() -> bool:
+    """Toggle system mute. Returns True if the system is now muted."""
+    endpoint = _volume_interface()
+    muted = not bool(endpoint.GetMute())
+    endpoint.SetMute(muted, None)
+    return muted
+
+
+# ---------- action handlers ----------
+def _handle_open_app(cmd: dict, confirm: Confirm) -> str:
+    """Open an installed app by name (resolved against the whitelist)."""
+    app_name = cmd.get("app")
+    resolved = resolve_app(app_name)
+    if resolved is None:
+        return f"❌ App not found: {app_name}"
+    if not _launch_app(resolved):
+        return f"❌ Could not open {resolved.name} (is it installed?)"
+    return f"✅ Opening {resolved.name}"
+
+
+def _handle_web_search(cmd: dict, confirm: Confirm) -> str:
+    """Search Google/YouTube (the domain is fixed in code; only the query is encoded)."""
+    query = (cmd.get("query") or "").strip()[:200]
+    if not query:
+        return "❌ Empty search"
+    engine = cmd.get("engine") if cmd.get("engine") in SEARCH_URLS else "google"
+    browser = cmd.get("browser") if cmd.get("browser") in BROWSER_NAMES else None
+    used = _open_url(SEARCH_URLS[engine] + quote_plus(query), browser)
+    return f"🔎 Searching {engine} for: {query}  [{used}]"
+
+
+def _handle_open_website(cmd: dict, confirm: Confirm) -> str:
+    """Open a site from the fixed whitelist (never a model-provided URL)."""
+    site = cmd.get("site")
+    if site not in SITES:
+        return f"❌ Website not allowed: {site}"
+    _open_url(SITES[site])
+    return f"🌐 Opening {site}"
+
+
+def _handle_create_folder(cmd: dict, confirm: Confirm) -> str:
+    """Create a folder on the Desktop (or the home folder if there is no Desktop)."""
+    name = _clean_name(cmd.get("name") or "")
+    if not name:
+        return "❌ Invalid folder name"
+    desktop = Path.home() / "Desktop"
+    path = (desktop if desktop.exists() else Path.home()) / name
+    path.mkdir(exist_ok=True)
+    return f"✅ Folder created: {path}"
+
+
+def _handle_open_folder(cmd: dict, confirm: Confirm) -> str:
+    """Open a known Windows folder or one directly under the home folder."""
+    name = _clean_name(cmd.get("name") or "")
+    if not name:
+        return "❌ Invalid folder name"
+    path = Path.home() / (name.capitalize() if name.lower() in KNOWN_FOLDERS else name)
+    if not path.is_dir():
+        return f"❌ Folder not found: {path}"
+    _open_path(path)
+    return f"✅ Opening {path}"
+
+
+def _handle_volume_up(cmd: dict, confirm: Confirm) -> str:
+    """Raise the volume by 10 percentage points."""
+    try:
+        level = _step_volume(10)
+    except Exception as e:  # COM/audio errors must not kill the assistant
+        log.warning("volume control failed: %s", e)
+        return "❌ Volume control unavailable"
+    return f"🔊 Volume up ({level}%)"
+
+
+def _handle_volume_down(cmd: dict, confirm: Confirm) -> str:
+    """Lower the volume by 10 percentage points."""
+    try:
+        level = _step_volume(-10)
+    except Exception as e:
+        log.warning("volume control failed: %s", e)
+        return "❌ Volume control unavailable"
+    return f"🔉 Volume down ({level}%)"
+
+
+def _handle_set_volume(cmd: dict, confirm: Confirm) -> str:
+    """Set the volume to an exact percentage (0-100)."""
+    try:
+        level = _set_volume_percent(int(cmd.get("level")))
+    except (TypeError, ValueError):
+        return "❌ Invalid volume level"
+    except Exception as e:
+        log.warning("volume control failed: %s", e)
+        return "❌ Volume control unavailable"
+    return f"🔊 Volume set to {level}%"
+
+
+def _handle_mute(cmd: dict, confirm: Confirm) -> str:
+    """Toggle system mute."""
+    try:
+        muted = _toggle_mute()
+    except Exception as e:
+        log.warning("volume control failed: %s", e)
+        return "❌ Volume control unavailable"
+    return "🔇 Muted" if muted else "🔊 Unmuted"
+
+
+def _handle_shutdown(cmd: dict, confirm: Confirm) -> str:
+    """Ask for confirmation, then shut down in 15 seconds (cancellable)."""
+    if confirm("⚠️ Shut down the computer? (y/n): ").strip().lower() != "y":
+        return "Cancelled"
+    _spawn(["shutdown", "/s", "/t", "15"])
+    return "⏻ Shutting down in 15s (cancel with: shutdown /a)"
+
+
+_HANDLERS: dict[str, Handler] = {
+    "open_app": _handle_open_app,
+    "web_search": _handle_web_search,
+    "open_website": _handle_open_website,
+    "create_folder": _handle_create_folder,
+    "open_folder": _handle_open_folder,
+    "volume_up": _handle_volume_up,
+    "volume_down": _handle_volume_down,
+    "set_volume": _handle_set_volume,
+    "mute": _handle_mute,
+    "shutdown": _handle_shutdown,
+}
+
+
+def execute(cmd: dict, confirm: Confirm = input) -> str:
     """Run a command dict from understand_command(). Returns a message to show the user."""
     action = cmd.get("action")
-
-    if action == "open_app":
-        app_name = cmd.get("app")
-        resolved = resolve_app(app_name)
-        if resolved is None:
-            return f"❌ App not found: {app_name}"
-        ok = _launch_app(resolved)
-        return f"✅ Opening {resolved.name}" if ok else f"❌ Could not open {resolved.name} (is it installed?)"
-
-    if action == "web_search":
-        query = (cmd.get("query") or "").strip()[:200]
-        if not query:
-            return "❌ Empty search"
-        engine = cmd.get("engine") if cmd.get("engine") in SEARCH_URLS else "google"
-        browser = cmd.get("browser") if cmd.get("browser") in BROWSER_NAMES else None
-        used = _open_url(SEARCH_URLS[engine] + quote_plus(query), browser)   # domain fixed, query URL-encoded
-        return f"🔎 Searching {engine} for: {query}  [{used}]"
-
-    if action == "open_website":
-        site = cmd.get("site")
-        if site not in SITES:
-            return f"❌ Website not allowed: {site}"
-        _open_url(SITES[site])
-        return f"🌐 Opening {site}"
-
-    if action == "create_folder":
-        name = _clean_name(cmd.get("name"))
-        if not name:
-            return "❌ Invalid folder name"
-        path = Path.home() / "Desktop" / name if (Path.home() / "Desktop").exists() else Path.home() / name
-        path.mkdir(exist_ok=True)
-        return f"✅ Folder created: {path}"
-
-    if action == "open_folder":
-        name = _clean_name(cmd.get("name"))
-        if not name:
-            return "❌ Invalid folder name"
-        path = Path.home() / (name.capitalize() if name.lower() in KNOWN_FOLDERS else name)
-        if not path.is_dir():
-            return f"❌ Folder not found: {path}"
-        _open_path(path)
-        return f"✅ Opening {path}"
-
-    if action == "volume_up":
-        _volume("up"); return "🔊 Volume up"
-    if action == "volume_down":
-        _volume("down"); return "🔉 Volume down"
-    if action == "mute":
-        _volume("mute"); return "🔇 Mute toggled"
-
-    if action == "shutdown":
-        if confirm("⚠️ Shut down the computer? (y/n): ").strip().lower() != "y":
-            return "Cancelled"
-        _spawn(["shutdown", "/s", "/t", "15"])
-        return "⏻ Shutting down in 15s (cancel with: shutdown /a)"
-
-    return "🤷 Didn't understand / unsupported command"
+    handler = _HANDLERS.get(action)
+    if handler is None:
+        log.debug("unsupported action: %r", action)
+        return "🤷 Didn't understand / unsupported command"
+    return handler(cmd, confirm)

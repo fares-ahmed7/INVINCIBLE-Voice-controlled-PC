@@ -46,7 +46,7 @@ garbles Arabic words. Use both to work out what was really said, then answer wit
 For search queries keep the words in the language the speaker meant (English words in English, Arabic words in Arabic).
 Convert the sentence into ONE JSON command.
 
-Actions: open_app, web_search, open_website, create_folder, open_folder, volume_up, volume_down, mute, shutdown, unknown.
+Actions: open_app, web_search, open_website, create_folder, open_folder, volume_up, volume_down, set_volume, mute, shutdown, unknown.
 Apps the assistant knows by name: {APPS}. Other installed Windows apps are allowed too.
 Rules:
 - open_app needs "app": the app name as the user said it (Arabic or English), e.g. "chrome", "كروم", "notepad++".
@@ -58,6 +58,7 @@ Rules:
 - If the user names a browser for the search (chrome/edge/firefox, or ايدج/كروم/فايرفوكس), put it in "browser". Otherwise omit "browser".
 - "open google and search for X" / "افتح جوجل وابحث عن X" is ONE web_search command.
 - create_folder and open_folder need "name" (the folder name only, nothing else).
+- set_volume needs "level": a whole number from 0 to 100.
 - If the request does not match any action (questions, chat, deleting files,
   brightness, anything unsupported), use "unknown". Never invent new actions.
 
@@ -88,6 +89,8 @@ Examples:
 "افتح فولدر الصور" -> {"action":"open_folder","name":"Pictures"}
 "علي الصوت" -> {"action":"volume_up"}
 "وطي الصوت" -> {"action":"volume_down"}
+"خلي الصوت 50" -> {"action":"set_volume","level":50}
+"set the volume to 30" -> {"action":"set_volume","level":30}
 "اكتم الصوت" -> {"action":"mute"}
 "اقفل الجهاز" -> {"action":"shutdown"}
 "ايه الجو النهارده" -> {"action":"unknown"}
@@ -162,6 +165,13 @@ def understand_command(text: str, model: Optional[str] = None) -> dict:
         cmd = Command(action="unknown")
     if cmd.action in ("create_folder", "open_folder") and not (cmd.name or "").strip():
         cmd = Command(action="unknown")
+    if cmd.action == "set_volume":
+        try:
+            level = int(cmd.level)
+        except (TypeError, ValueError):
+            cmd = Command(action="unknown")
+        else:
+            cmd = Command(action="set_volume", level=level) if 0 <= level <= 100 else Command(action="unknown")
     if cmd.action == "shutdown":
         # shutdown takes no payload: drop anything else the model may have added
         cmd = Command(action="shutdown")

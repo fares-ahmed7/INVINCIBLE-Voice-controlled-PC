@@ -2,3 +2,5 @@ ollama>=0.6.0
 pydantic>=2.7.0
 SpeechRecognition>=3.10.0
 pyaudio>=0.2.14
+pycaw>=0.6.1
+comtypes>=1.4.0

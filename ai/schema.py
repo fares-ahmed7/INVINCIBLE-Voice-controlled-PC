@@ -27,6 +27,7 @@ ActionName = Literal[
     "open_folder",
     "volume_up",
     "volume_down",
+    "set_volume",
     "mute",
     "shutdown",
     "unknown",
@@ -41,3 +42,4 @@ class Command(BaseModel):
     engine: Optional[EngineName] = None  # used with web_search (default: google)
     site: Optional[SiteName] = None # used with open_website
     browser: Optional[str] = None   # used with web_search: chrome / edge / firefox (default: system browser)
+    level: Optional[int] = None     # used with set_volume: 0-100
