@@ -99,7 +99,7 @@ def build_listener(lang: str, mic_index: Optional[int]) -> Callable[..., Optiona
 
 def main():
     if sys.platform != "win32":
-        print("❌ INVINCIBLE currently runs on Windows only. Exiting.")
+        print("❌ shawkat currently runs on Windows only. Exiting.")
         sys.exit(1)
 
     parser = argparse.ArgumentParser()

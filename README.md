@@ -1,4 +1,4 @@
-# INVINCIBLE – Voice-controlled PC
+# shawkat – Voice-controlled PC
 
 تحكّم في الكمبيوتر بصوتك (عربي، إنجليزي، أو الاتنين مع بعض).
 بيسمع كلامك، بيفهمه بموديل AI شغال على جهازك، وبينفّذ الأمر **من قائمة أوامر آمنة بس**.
@@ -41,7 +41,7 @@ python main.py --max-per-minute 20      # حد الأوامر في الدقيق�
 
 اخرج بقول **exit** أو **خروج** (أو `Ctrl+C`).
 
-> حد الأوامر افتراضيًا 10/دقيقة. غيّره بـ `--max-per-minute` أو `INVINCIBLE_MAX_PER_MINUTE` (0 = بلا حد).
+> حد الأوامر افتراضيًا 10/دقيقة. غيّره بـ `--max-per-minute` أو `shawkat_MAX_PER_MINUTE` (0 = بلا حد).
 
 > لو PowerShell قالك "running scripts is disabled":
 > `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
@@ -96,15 +96,15 @@ python main.py --voice --mic 1            # اختار ميكروفون
 
 ### Wake word
 
-في وضع الصوت لازم تبدأ الأمر بكلمة **invincible** أو **إنفينسيبل** (وبيتقبل اختلافات الـ STT زي "invisible"):
+في وضع الصوت لازم تبدأ الأمر بكلمة **shawkat** أو **شوكت** (وبيتقبل اختلافات الـ STT زي "invisible"):
 
 ```
-🎤 "invincible افتح كروم"
+🎤 "shawkat افتح كروم"
 📝 افتح كروم
 ```
 
 - بتتشال قبل ما تتبعت للموديل.
-- عطّلها بـ `--no-wake` أو `INVINCIBLE_WAKE=0`.
+- عطّلها بـ `--no-wake` أو `shawkat_WAKE=0`.
 - كلمة الخروج (`exit`/`خروج`) شغالة من غير wake word.
 
 ### التأكيد بالصوت
@@ -130,7 +130,7 @@ python main.py --voice --mic 1            # اختار ميكروفون
 
 ## السجلات
 
-كل أمر بيتنفّذ بيتسجل في `logs/invincible.log`: الوقت، النص الخام، JSON اللي رجع من الموديل، والنتيجة.
+كل أمر بيتنفّذ بيتسجل في `logs/shawkat.log`: الوقت، النص الخام، JSON اللي رجع من الموديل، والنتيجة.
 الملف بيلفّ تلقائيًا عند 1MB (3 نسخ احتياطية)، ومجلد `logs/` مش بيتعمل Commit.
 
 ---
@@ -209,9 +209,9 @@ print(execute(cmd))   # "✅ Opening chrome"
 
 - `understand_command` **ما بترميش exception** لو الموديل رجّع حاجة غلط، بترجّع `{"action": "unknown"}`.
 - لو Ollama مش شغال بترمي Exception (اتعامل معاه في الـ UI).
-- غيّر الموديل: `INVINCIBLE_MODEL=qwen3:1.7b` (أخف) أو `qwen3:8b` (أدق في الجمل المخلوطة).
+- غيّر الموديل: `shawkat_MODEL=qwen3:1.7b` (أخف) أو `qwen3:8b` (أدق في الجمل المخلوطة).
 - Ollama على جهاز تاني: `OLLAMA_HOST=http://IP:11434`.
-- في PowerShell: `$env:INVINCIBLE_MODEL="qwen3:8b"`.
+- في PowerShell: `$env:shawkat_MODEL="qwen3:8b"`.
 
 ---
 

@@ -4,7 +4,7 @@ Run commands for real.
     python main.py                      # type commands
     python main.py --voice              # speak commands (Arabic + English, mixed)
     python main.py --voice --lang en-US # English only
-    python main.py --voice --no-wake    # don't require the "invincible" wake word
+    python main.py --voice --no-wake    # don't require the "shawkat" wake word
     python main.py --max-per-minute 20  # change the command rate limit (0 = unlimited)
 """
 from __future__ import annotations
@@ -23,7 +23,7 @@ from typing import Callable, Optional
 
 # Fail with a friendly message before importing Windows-only modules (pycaw/comtypes).
 if sys.platform != "win32":
-    print("❌ INVINCIBLE currently runs on Windows only. Exiting.")
+    print("❌ shawkat currently runs on Windows only. Exiting.")
     raise SystemExit(1)
 
 from ai import understand_command, warmup
@@ -37,18 +37,16 @@ log = logging.getLogger(__name__)
 _LOGGING_CONFIGURED = False
 
 LOG_DIR = Path(__file__).resolve().parent / "logs"
-LOG_FILE = LOG_DIR / "invincible.log"
+LOG_FILE = LOG_DIR / "shawkat.log"
 
 EXIT_WORDS = {"exit", "quit", "stop", "خروج", "وقف", "اخرج"}
 
 # ---------- wake word ----------
 _WAKE_WORDS = (
     # English + common Google STT misspellings
-    "invincible", "invincibles", "invisible",
+    "shoukat", "shawkat", "shokat", "showkat", "shawket", "shoket",
     # Arabic + common spellings
-    "إنفينسيبل", "انفينسيبل", "إنفنسيبل", "انفنسيبل", "إنفينسبل", "انفينسبل",
-    "إنفيسيبل", "انفيسيبل", "إنفيسيبول", "انفيسيبول", "إنفينسيبول", "انفينسيبول",
-    "إنفنسبل", "انفنسبل",
+    "شوكت", "شوكة", "شوكات", "شوقت", "شوكط",
 )
 _WAKE_RE = re.compile(
     r"(?<!\w)(?:"
@@ -165,7 +163,7 @@ class RateLimiter:
 
 
 def setup_logging(debug: bool = False) -> None:
-    """Console logging + rotating file logging (logs/invincible.log)."""
+    """Console logging + rotating file logging (logs/shawkat.log)."""
     global _LOGGING_CONFIGURED
     if _LOGGING_CONFIGURED:
         return
@@ -202,7 +200,7 @@ def _env_int(name: str, default: int) -> int:
 
 def main() -> None:
     if sys.platform != "win32":
-        print("❌ INVINCIBLE currently runs on Windows only. Exiting.")
+        print("❌ shawkat currently runs on Windows only. Exiting.")
         sys.exit(1)
 
     p = argparse.ArgumentParser()
@@ -211,8 +209,8 @@ def main() -> None:
                    help="mixed (Arabic+English, default), ar-EG, or en-US")
     p.add_argument("--mic", type=int, default=None)
     p.add_argument("--debug", action="store_true", help="verbose logs + STT/LLM/execute timings")
-    p.add_argument("--no-wake", action="store_true", help="don't require the 'invincible' wake word (voice mode)")
-    p.add_argument("--max-per-minute", type=int, default=_env_int("INVINCIBLE_MAX_PER_MINUTE", 10),
+    p.add_argument("--no-wake", action="store_true", help="don't require the 'shawkat' wake word (voice mode)")
+    p.add_argument("--max-per-minute", type=int, default=_env_int("shawkat_MAX_PER_MINUTE", 10),
                    help="max commands per minute (0 = unlimited; default 10)")
     args = p.parse_args()
 
@@ -239,7 +237,7 @@ def main() -> None:
     wake_enabled = (
         args.voice
         and not args.no_wake
-        and os.getenv("INVINCIBLE_WAKE", "1").strip().lower() not in {"0", "false", "no", "off"}
+        and os.getenv("shawkat_WAKE", "1").strip().lower() not in {"0", "false", "no", "off"}
     )
     limiter = RateLimiter(args.max_per_minute)
 
@@ -259,7 +257,7 @@ def main() -> None:
         print("   Make sure Ollama is running (ollama serve) and qwen3:4b is pulled.")
         sys.exit(1)
     if wake_enabled:
-        print("Wake word is ON — start each command with 'invincible' / 'إنفينسيبل'.")
+        print("Wake word is ON — start each command with 'shawkat' / 'شوكت'.")
     print(f"Ready ({app_count} Start Menu apps). Say/type 'exit' to quit.\n")
 
     try:
@@ -287,7 +285,7 @@ def main() -> None:
             if wake_enabled and not is_exit(text):
                 stripped = strip_wake_word(text)
                 if stripped is None:
-                    print("💤 Wake word not heard (say 'invincible').")
+                    print("💤 Wake word not heard (say 'shawkat').")
                     continue
                 text = stripped
                 if not text:

@@ -1,4 +1,4 @@
-"""Offline unit tests for INVINCIBLE.
+"""Offline unit tests for shawkat.
 
 No microphone, Ollama server, or internet connection is needed.
 Run with:  python -m pytest -q
@@ -175,13 +175,13 @@ def test_clean_text_removes_invisible_marks():
 
 
 @pytest.mark.parametrize("text,expected", [
-    ("invincible open chrome", "open chrome"),
-    ("إنفينسيبل افتح كروم", "افتح كروم"),
+    ("shawkat open chrome", "open chrome"),
+    ("شوكت افتح كروم", "افتح كروم"),
     ("invisible open chrome", "open chrome"),
-    ("[ar] إنفينسيبل افتح كروم || [en] invincible open chrome",
+    ("[ar] شوكت افتح كروم || [en] shawkat open chrome",
      "[ar] افتح كروم || [en] open chrome"),
-    ("hey invincible open chrome", "open chrome"),
-    ("invincible exit", "exit"),
+    ("hey shawkat open chrome", "open chrome"),
+    ("shawkat exit", "exit"),
 ])
 def test_strip_wake_word(text, expected):
     assert strip_wake_word(text) == expected
@@ -189,9 +189,9 @@ def test_strip_wake_word(text, expected):
 
 def test_strip_wake_word_absent_or_only():
     assert strip_wake_word("open chrome") is None
-    assert strip_wake_word("invincible") == ""
-    assert strip_wake_word("invincible!") == ""
-    assert strip_wake_word("[en] invincible!") == ""
+    assert strip_wake_word("shawkat") == ""
+    assert strip_wake_word("shawkat!") == ""
+    assert strip_wake_word("[en] shawkat!") == ""
 
 
 @pytest.mark.parametrize("text,expected", [
@@ -199,7 +199,7 @@ def test_strip_wake_word_absent_or_only():
     ("خروج", True),
     ("exit.", True),
     ("خروج!", True),
-    ("invincible exit", False),
+    ("shawkat exit", False),
     ("open chrome", False),
 ])
 def test_is_exit(text, expected):

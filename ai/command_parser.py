@@ -1,12 +1,12 @@
 """
-AI / NLP module (INVINCIBLE)
+AI / NLP module (shawkat)
 
     understand_command("افتح كروم")  ->  {"action": "open_app", "app": "chrome", "name": None}
 
 This module only talks to a local Ollama server, so it has no OS-specific code.
 
 Config (environment variables, all optional):
-    INVINCIBLE_MODEL   model name            (default: qwen3:4b)
+    shawkat_MODEL   model name            (default: qwen3:4b)
     OLLAMA_HOST        Ollama server address (default: http://localhost:11434)
 """
 import os
@@ -20,7 +20,7 @@ from .apps import APP_NAMES, BROWSER_NAMES
 from .schema import Command
 from .sites import SITE_ALIASES, SITES
 
-MODEL = os.getenv("INVINCIBLE_MODEL", "qwen3:4b")
+MODEL = os.getenv("shawkat_MODEL", "qwen3:4b")
 
 _INVISIBLE = re.compile(r"[\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff\u200b]")
 
