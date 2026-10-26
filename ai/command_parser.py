@@ -15,6 +15,7 @@ from typing import Optional
 
 import ollama
 
+from .app_registry import sanitize_app_name
 from .apps import APP_NAMES, BROWSER_NAMES
 from .schema import Command
 
@@ -46,10 +47,12 @@ For search queries keep the words in the language the speaker meant (English wor
 Convert the sentence into ONE JSON command.
 
 Actions: open_app, web_search, open_website, create_folder, open_folder, volume_up, volume_down, mute, shutdown, unknown.
-Apps: {APPS}.
+Apps the assistant knows by name: {APPS}. Other installed Windows apps are allowed too.
 Rules:
-- open_app needs "app" (exactly one name from the Apps list). If the app is NOT in the list, use "unknown" - never pick a different app.
-- open_app needs "app". If the user says just "browser"/"المتصفح" use firefox.
+- open_app needs "app": the app name as the user said it (Arabic or English), e.g. "chrome", "كروم", "notepad++".
+  Return ONLY a short app name - never a file path, executable path, command, or URL.
+  If the user says just "browser"/"المتصفح", use firefox. If no app name is clear, use "unknown".
+  Never substitute a different app than the one the user named.
 - web_search needs "query" (only the search words, without "search for"/"ابحث عن") and "engine" (google by default, youtube if the user says youtube/يوتيوب).
 - open_website needs "site", one of: google, youtube, facebook, gmail, github, whatsapp, wikipedia. Websites not in the list -> unknown.
 - If the user names a browser for the search (chrome/edge/firefox, or ايدج/كروم/فايرفوكس), put it in "browser". Otherwise omit "browser".
@@ -63,7 +66,9 @@ Examples:
 "افتح ديسكورد" -> {"action":"open_app","app":"discord"}
 "افتح سبوتيفاي" -> {"action":"open_app","app":"spotify"}
 "افتح الاعدادات" -> {"action":"open_app","app":"settings"}
-"افتح فوتوشوب" -> {"action":"unknown"}
+"افتح فوتوشوب" -> {"action":"open_app","app":"فوتوشوب"}
+"open notepad++" -> {"action":"open_app","app":"notepad++"}
+"open C:\\Windows\\System32\\cmd.exe" -> {"action":"unknown"}
 "افتح المتصفح" -> {"action":"open_app","app":"firefox"}
 "open the calculator" -> {"action":"open_app","app":"calculator"}
 "شغل الترمنال" -> {"action":"open_app","app":"terminal"}
@@ -143,8 +148,8 @@ def understand_command(text: str, model: Optional[str] = None) -> dict:
 
     # Sanity checks: a command missing its required field is useless -> unknown
     if cmd.action == "open_app":
-        app = (cmd.app or "").strip().lower()
-        cmd = Command(action="open_app", app=app) if app in APP_NAMES else Command(action="unknown")
+        app = sanitize_app_name(cmd.app or "")
+        cmd = Command(action="open_app", app=app) if app else Command(action="unknown")
     if cmd.action == "web_search":
         if not (cmd.query or "").strip():
             cmd = Command(action="unknown")
@@ -160,6 +165,9 @@ def understand_command(text: str, model: Optional[str] = None) -> dict:
     if cmd.action == "shutdown":
         # shutdown takes no payload: drop anything else the model may have added
         cmd = Command(action="shutdown")
+    if cmd.action == "unknown":
+        # unknown takes no payload either (never echo a path/URL the model may have produced)
+        cmd = Command(action="unknown")
 
     return cmd.model_dump()
 

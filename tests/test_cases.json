@@ -353,7 +353,7 @@
  {
   "text": "افتح فوتوشوب",
   "expected": {
-   "action": "unknown"
+   "action": "open_app"
   }
  },
  {

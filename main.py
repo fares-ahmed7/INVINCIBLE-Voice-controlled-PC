@@ -11,6 +11,7 @@ import sys
 import time
 
 from ai import understand_command, warmup
+from ai.app_registry import discover_apps
 from executor import execute
 
 _INVISIBLE = re.compile(r"[\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff\u200b]")
@@ -53,9 +54,11 @@ def main():
             except EOFError:
                 return None      # EOF (e.g. piped input) -> treat as "no more commands"
 
+    print("Scanning Start Menu...")
+    app_count = len(discover_apps())
     print("Loading model...")
     warmup()
-    print("Ready. Say/type 'exit' to quit.\n")
+    print(f"Ready ({app_count} Start Menu apps). Say/type 'exit' to quit.\n")
 
     try:
         while True:

@@ -11,7 +11,8 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import quote_plus
 
-from ai.apps import APPS as _APPS, BROWSER_NAMES
+from ai.app_registry import ResolvedApp, resolve_app
+from ai.apps import BROWSER_NAMES
 
 
 def _spawn(cmd):
@@ -48,28 +49,26 @@ def _find_shortcut(keyword: str):
     return best
 
 
-def _uri_registered(scheme: str) -> bool:
-    """True if Windows has a handler for scheme: (e.g. discord:)."""
-    try:
-        import winreg
-        with winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, scheme) as k:
-            winreg.QueryValueEx(k, "URL Protocol")
-        return True
-    except (OSError, ImportError):
-        return False
-
-
 def _shell_open(target: str):
     """Open a URI/shortcut through explorer.exe, so the new app is NOT a child of our terminal
     (nothing it prints can leak here, and Ctrl+C can't kill it)."""
     _spawn(["explorer.exe", target])
 
 
-def _launch_windows(app: str) -> bool:
-    target, keyword = _APPS[app]
+def _launch_app(resolved: ResolvedApp) -> bool:
+    """Launch an app resolved by ai.app_registry (manual target or Start-Menu shortcut).
 
-    # 1) Discord's own launcher (silent, fully detached)
-    if app == "discord":
+    Only targets that came from OUR whitelist are used - never raw model text.
+    """
+    if resolved.kind == "shortcut":
+        try:
+            os.startfile(resolved.target)   # .lnk path from our Start Menu scan
+            return True
+        except OSError:
+            return False
+
+    # Discord's own launcher (silent, fully detached)
+    if resolved.name == "discord":
         local = os.environ.get("LOCALAPPDATA")
         if local:
             upd = Path(local) / "Discord" / "Update.exe"
@@ -77,24 +76,18 @@ def _launch_windows(app: str) -> bool:
                 _spawn([str(upd), "--processStart", "Discord.exe"])
                 return True
 
-    # 2) URI targets (discord:, spotify:, ms-settings: ...) -> only if Windows has a handler
-    if target.endswith(":"):
-        if _uri_registered(target[:-1]):
-            _shell_open(target)
-            return True
-    else:
-        # 3) registered exe name (chrome.exe, calc.exe, winword.exe ...)
-        try:
-            os.startfile(target)
-            return True
-        except OSError:
-            pass
-
-    # 4) Start Menu shortcut
-    lnk = _find_shortcut(keyword)
-    if lnk:
-        _shell_open(str(lnk))
+    try:
+        os.startfile(resolved.target)   # exe name or URI scheme from ai/apps.py
         return True
+    except OSError:
+        pass
+
+    # Fallback: Start Menu shortcut by keyword
+    if resolved.keyword:
+        lnk = _find_shortcut(resolved.keyword)
+        if lnk:
+            _shell_open(str(lnk))
+            return True
     return False
 
 
@@ -177,11 +170,12 @@ def execute(cmd: dict, confirm=input) -> str:
     action = cmd.get("action")
 
     if action == "open_app":
-        app = cmd.get("app")
-        if app not in _APPS:
-            return f"❌ Unknown app: {app}"
-        ok = _launch_windows(app)
-        return f"✅ Opening {app}" if ok else f"❌ Could not open {app} (is it installed?)"
+        app_name = cmd.get("app")
+        resolved = resolve_app(app_name)
+        if resolved is None:
+            return f"❌ App not found: {app_name}"
+        ok = _launch_app(resolved)
+        return f"✅ Opening {resolved.name}" if ok else f"❌ Could not open {resolved.name} (is it installed?)"
 
     if action == "web_search":
         query = (cmd.get("query") or "").strip()[:200]

@@ -60,8 +60,10 @@ python main.py --voice --debug  # بالصوت + سجل أوقات (STT / AI / �
 
 أي حاجة برّه القائمة دي بتطلع `Didn't understand` ومبتتنفذش.
 
-**التطبيقات المتاحة:** chrome, firefox, edge, calculator, terminal, files, text_editor, paint,
-task_manager, settings, discord, spotify, whatsapp, telegram, vscode, word, excel, powerpoint.
+**التطبيقات:** أول ما البرنامج يشتغل بيعمل Scan لقايمة Start (بتاعتك و All Users) ويلاقي التطبيقات المتثبتة تلقائيًا.
+وفي كمان قايمة Manual Override في `ai/apps.py` فيها اختصارات وأسماء عربية:
+chrome, firefox, edge, calculator, terminal, files, text_editor, paint, task_manager,
+settings, discord, spotify, whatsapp, telegram, vscode, word, excel, powerpoint.
 
 **المواقع المتاحة:** google, youtube, facebook, gmail, github, whatsapp, wikipedia.
 
@@ -94,7 +96,8 @@ python main.py --voice --mic 1            # اختار ميكروفون
 
 الموديل **مبينفّذش حاجة**، هو بس بيحوّل الكلام لـ JSON. كل حاجة بتتنفّذ جاية من كودنا:
 
-- **Whitelist:** التطبيقات والمواقع والأوامر مكتوبة مسبقًا. أي حاجة برّه القايمة بتتقفل.
+- **Whitelist:** التطبيقات والمواقع والأوامر معروفة مسبقًا (Manual + Start Menu Scan). أي حاجة برّه القايمة بتتقفل.
+- **اسم التطبيق بس:** الموديل بيدّي اسم تطبيق قصير — لو حاول يرجّع Path أو Command أو URL بيتم رفضه. الإطلاق بيحصل على Target من عندنا بس (`os.startfile` على اختصار Start أو Target مسجّل).
 - **الموديل مبيدّيش رابط أبدًا:** بيدّي كلمة البحث أو اسم موقع بس. الدومين (`google.com`/`youtube.com`) ثابت في الكود، والكلمة بتتحوّل لصيغة آمنة (`quote_plus`).
 - **من غير `shell=True`:** الأوامر بتتشغّل كقوائم.
 - **أسماء الفولدرات** بتتنضّف (حروف وأرقام ومسافة و `-` `_` بس).
@@ -108,7 +111,8 @@ python main.py --voice --mic 1            # اختار ميكروفون
 ```
 ai/
   schema.py          # شكل الـ JSON (العقد بين الموديولات) ← اقراه الأول
-  apps.py            # قايمة التطبيقات ← هنا بس بتضيف تطبيق جديد
+  apps.py            # Manual Override: أسماء/اختصارات عربية + Targets خاصة
+  app_registry.py    # Start Menu Scan + التحقق من اسم التطبيق ومطابقته
   command_parser.py  # understand_command() + الـ prompt + التحقق من ردّ الموديل
 executor.py          # بينفّذ الأمر فعلًا (Windows)
 main.py              # الصوت/الكتابة → AI → التنفيذ  (ده اللي بتشغّله)
@@ -122,13 +126,20 @@ tests/
 
 ## إضافة حاجات جديدة
 
-**تطبيق جديد**: سطر واحد في `ai/apps.py`:
+**تطبيق جديد**: مش محتاج تسجّله — البرنامج بيلاقي تطبيقات قايمة Start تلقائيًا.
+
+لو عايز **Override يدوي** (اسم عربي، اختصار، أو Launcher خاص زي Discord)، زوّد سطر في `ai/apps.py`:
 ```python
 #            Windows target   Start-Menu keyword
 "notepadpp": ("notepad++.exe", "notepad++"),
 ```
 الـ target بيكون اسم exe مسجّل في Windows، أو رابط زي `discord:`.
-لو فشل، الكود بيدوّر على اختصار بالكلمة دي في قايمة Start.
+ولو عايز اسم عربي أو Alias، زوّده في `ALIASES` في نفس الملف:
+```python
+"نوتباد": "notepad++",
+```
+لو الـ target فشل، الكود بيدوّر على اختصار بالكلمة دي في قايمة Start.
+Manual Override دايمًا بيكسب قبل الـ Scan.
 
 **موقع جديد**: ضيف الاسم في `SiteName` (`ai/schema.py`) + سطر `open_website` في `SYSTEM_PROMPT` + قاموس `SITES` في `executor.py`.
 
@@ -164,7 +175,7 @@ print(execute(cmd))   # "✅ Opening chrome"
 
 | المشكلة | الحل |
 |---|---|
-| `Could not open X` | التطبيق مش متثبت أو مش مسجّل. جرّب تفتحه من `Win + R` بنفس الاسم |
+| `App not found: X` | التطبيق مش متثبت أو اسمه مختلف. جرّب تفتحه من `Win + R` بنفس الاسم، أو ضيف Alias في `ai/apps.py` |
 | الصوت مش بيسمع | `--list-mics` وبعدين `--mic <رقم>`، وتأكد من Privacy → Microphone في Windows |
 | `Speech service error` | مفيش نت |
 | الموديل بيفهم غلط | ضيف الجملة في `test_cases.json` ومثال في `SYSTEM_PROMPT`، أو جرّب موديل أكبر |
