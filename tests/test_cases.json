@@ -428,5 +428,166 @@
   "expected": {
    "action": "volume_down"
   }
+ },
+ {
+  "text": "خلي الصوت 50",
+  "expected": {
+   "action": "set_volume",
+   "level": 50
+  }
+ },
+ {
+  "text": "set the volume to 30",
+  "expected": {
+   "action": "set_volume",
+   "level": 30
+  }
+ },
+ {
+  "text": "volume 0",
+  "expected": {
+   "action": "set_volume",
+   "level": 0
+  }
+ },
+ {
+  "text": "شغل الصوت",
+  "expected": {
+   "action": "unmute"
+  }
+ },
+ {
+  "text": "unmute",
+  "expected": {
+   "action": "unmute"
+  }
+ },
+ {
+  "text": "open notepad",
+  "expected": {
+   "action": "open_app",
+   "app": "notepad"
+  }
+ },
+ {
+  "text": "افتح الكروم",
+  "expected": {
+   "action": "open_app",
+   "app": "chrome"
+  }
+ },
+ {
+  "text": "open gmail",
+  "expected": {
+   "action": "open_website",
+   "site": "gmail"
+  }
+ },
+ {
+  "text": "افتح ويكيبيديا",
+  "expected": {
+   "action": "open_website",
+   "site": "wikipedia"
+  }
+ },
+ {
+  "text": "افتحلي كروم",
+  "expected": {
+   "action": "open_app",
+   "app": "chrome"
+  }
+ },
+ {
+  "text": "وطي الصوت شوية",
+  "expected": {
+   "action": "volume_down"
+  }
+ },
+ {
+  "text": "علي الصوت شوية",
+  "expected": {
+   "action": "volume_up"
+  }
+ },
+ {
+  "text": "اقفل الكمبيوتر",
+  "expected": {
+   "action": "shutdown"
+  }
+ },
+ {
+  "text": "اعمل لي فولدر اسمه شغل",
+  "expected": {
+   "action": "create_folder"
+  }
+ },
+ {
+  "text": "ادخل على يوتيوب",
+  "expected": {
+   "action": "open_website",
+   "site": "youtube"
+  }
+ },
+ {
+  "text": "[ar] افتح يوتيوب || [en] open youtube",
+  "expected": {
+   "action": "open_website",
+   "site": "youtube"
+  }
+ },
+ {
+  "text": "[ar] خلي الصوت 40 || [en] set the volume to 40",
+  "expected": {
+   "action": "set_volume",
+   "level": 40
+  }
+ },
+ {
+  "text": "open crome",
+  "expected": {
+   "action": "open_app",
+   "app": [
+    "chrome",
+    "crome"
+   ]
+  }
+ },
+ {
+  "text": "افتح جيميل",
+  "expected": {
+   "action": "open_website",
+   "site": "gmail"
+  }
+ },
+ {
+  "text": "open wikipidia",
+  "expected": {
+   "action": "open_website",
+   "site": "wikipedia"
+  }
+ },
+ {
+  "text": "format the C drive",
+  "expected": {
+   "action": "unknown"
+  }
+ },
+ {
+  "text": "send an email to John",
+  "expected": {
+   "action": "unknown"
+  }
+ },
+ {
+  "text": "install photoshop",
+  "expected": {
+   "action": "unknown"
+  }
+ },
+ {
+  "text": "change my wallpaper",
+  "expected": {
+   "action": "unknown"
+  }
  }
 ]

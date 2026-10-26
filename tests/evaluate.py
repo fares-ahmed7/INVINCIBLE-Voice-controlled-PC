@@ -4,6 +4,8 @@ Measure accuracy + speed of the AI module.
     python -m tests.evaluate                    # default model
     python -m tests.evaluate --model qwen3:1.7b # compare another model
 
+Some sentences are answered by the local fast path (no model call) - that is expected.
+A list in "expected" means any of the listed values is acceptable.
 Add new sentences to tests/test_cases.json whenever the system gets one wrong.
 """
 import argparse
@@ -16,13 +18,18 @@ from ai import understand_command, warmup
 CASES = Path(__file__).with_name("test_cases.json")
 
 
+def _value_matches(got, value) -> bool:
+    """Compare one field. A list of values means 'any of these is acceptable'."""
+    if isinstance(value, list):
+        return any(_value_matches(got, option) for option in value)
+    if isinstance(value, str) and isinstance(got, str):
+        return got.strip().lower() == value.strip().lower()
+    return got == value
+
+
 def matches(result: dict, expected: dict) -> bool:
     for key, value in expected.items():          # only compare the fields listed in "expected"
-        got = result.get(key)
-        if isinstance(value, str) and isinstance(got, str):
-            if got.strip().lower() != value.strip().lower():
-                return False
-        elif got != value:
+        if not _value_matches(result.get(key), value):
             return False
     return True
 

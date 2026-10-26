@@ -140,13 +140,15 @@ ai/
   schema.py          # شكل الـ JSON (العقد بين الموديولات) ← اقراه الأول
   apps.py            # Manual Override: أسماء/اختصارات عربية + Targets خاصة
   app_registry.py    # Start Menu Scan + التحقق من اسم التطبيق ومطابقته
+  sites.py           # المواقع المسموحة (الدومين ثابت في الكود)
   command_parser.py  # understand_command() + الـ prompt + التحقق من ردّ الموديل
 executor.py          # بينفّذ الأمر فعلًا (Windows)
 main.py              # الصوت/الكتابة → AI → التنفيذ  (ده اللي بتشغّله)
 voice_demo.py        # الميكروفون + STT وطباعة النص/الـ JSON بس
 tests/
-  test_cases.json    # جمل الاختبار (عربي/إنجليزي/مخلوط)
-  evaluate.py        # بيقيس الدقة والسرعة
+  test_cases.json    # جمل الاختبار (عربي/إنجليزي/مخلوط/مصري)
+  evaluate.py        # بيقيس الدقة والسرعة (محتاج Ollama)
+  test_unit.py       # اختبارات offline (من غير ميكروفون/Ollama/نت)
 ```
 
 ---
@@ -176,6 +178,19 @@ Manual Override دايمًا بيكسب قبل الـ Scan.
 3. `executor.py` ← الـ mapping في `execute()`
 4. `tests/test_cases.json` ← جمل اختبار
 5. `python -m tests.evaluate` ← تأكد إن الدقة ما قلّتش
+
+---
+
+## الاختبارات
+
+```powershell
+# اختبارات سريعة Offline (من غير ميكروفون/Ollama/نت)
+pip install -r requirements-dev.txt
+python -m pytest -q
+
+# دقة الموديل (محتاج Ollama شغال + qwen3:4b)
+python -m tests.evaluate
+```
 
 ---
 
