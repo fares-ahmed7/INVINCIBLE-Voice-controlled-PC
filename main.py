@@ -25,6 +25,10 @@ EXIT_WORDS = {"exit", "quit", "stop", "خروج", "وقف", "اخرج"}
 
 
 def main():
+    if sys.platform != "win32":
+        print("❌ INVINCIBLE currently runs on Windows only. Exiting.")
+        sys.exit(1)
+
     p = argparse.ArgumentParser()
     p.add_argument("--voice", action="store_true")
     p.add_argument("--lang", default="mixed", help="mixed (Arabic+English, default), ar-EG, or en-US")

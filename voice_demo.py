@@ -1,5 +1,5 @@
 """
-Voice demo: speak -> text -> AI module -> JSON.   (Works on Windows and Linux. Nothing is executed.)
+Voice demo: speak -> text -> AI module -> JSON.   (Windows-only. Nothing is executed.)
 
     python voice_demo.py                 # Arabic (ar-EG)
     python voice_demo.py --lang en-US    # English
@@ -7,8 +7,7 @@ Voice demo: speak -> text -> AI module -> JSON.   (Works on Windows and Linux. N
     python voice_demo.py --mic 1         # use microphone number 1
 
 Needs internet for the speech recognition (Google Web Speech API).
-If PyAudio is not installed, it falls back to "press Enter, then speak for 5 seconds"
-using sounddevice.
+Requires PyAudio for microphone access.
 """
 import argparse
 import json
@@ -28,48 +27,31 @@ def clean_text(text: str) -> str:
     return _INVISIBLE.sub("", text or "").strip()
 
 
-RECORD_SECONDS = 5
 EXIT_WORDS = {"exit", "quit", "stop", "خروج", "وقف", "اخرج"}
 
 
 def build_listener(lang: str, mic_index):
+    """Build the microphone listener (Google STT via speech_recognition)."""
     recognizer = sr.Recognizer()
 
-    # ---- Preferred: automatic detection of speech start/end (needs PyAudio) ----
     try:
         mic = sr.Microphone(device_index=mic_index)
-    except (AttributeError, OSError, ImportError):
-        mic = None
+    except (AttributeError, OSError, ImportError) as e:
+        sys.exit(f"❌ No microphone available ({e}).\n"
+                 "Install PyAudio and check Windows Privacy -> Microphone.")
 
-    if mic is not None:
+    with mic as source:
+        print("Calibrating for background noise (1s)... stay quiet")
+        recognizer.adjust_for_ambient_noise(source, duration=1)
+
+    def get_audio():
         with mic as source:
-            print("Calibrating for background noise (1s)... stay quiet")
-            recognizer.adjust_for_ambient_noise(source, duration=1)
-
-        def get_audio():
-            with mic as source:
-                print("🎤 Listening... speak now")
-                try:
-                    # phrase_time_limit ends recognition early so long rambles don't hold the mic
-                    return recognizer.listen(source, timeout=8, phrase_time_limit=5)
-                except sr.WaitTimeoutError:
-                    return None
-    else:
-        # ---- Fallback: push-to-talk with sounddevice (no PyAudio needed) ----
-        try:
-            import sounddevice as sd
-        except ImportError:
-            sys.exit("Neither PyAudio nor sounddevice is installed.\n"
-                     "Run:  pip install sounddevice numpy")
-        print("PyAudio not found -> using push-to-talk mode (sounddevice).")
-
-        def get_audio():
-            input(f"Press Enter, then speak for {RECORD_SECONDS} seconds... ")
-            print("🎤 Recording...")
-            data = sd.rec(int(RECORD_SECONDS * 16000), samplerate=16000,
-                          channels=1, dtype="int16", device=mic_index)
-            sd.wait()
-            return sr.AudioData(data.tobytes(), 16000, 2)
+            print("🎤 Listening... speak now")
+            try:
+                # phrase_time_limit ends recognition early so long rambles don't hold the mic
+                return recognizer.listen(source, timeout=8, phrase_time_limit=5)
+            except sr.WaitTimeoutError:
+                return None
 
     def recognize_one(audio, language):
         try:
@@ -108,6 +90,10 @@ def build_listener(lang: str, mic_index):
 
 
 def main():
+    if sys.platform != "win32":
+        print("❌ INVINCIBLE currently runs on Windows only. Exiting.")
+        sys.exit(1)
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--lang", default="ar-EG", help="ar-EG, en-US, or mixed")
     parser.add_argument("--mic", type=int, default=None, help="microphone number")
@@ -126,8 +112,8 @@ def main():
             for i, name in enumerate(sr.Microphone.list_microphone_names()):
                 print(f"{i}: {name}")
         except AttributeError:
-            sys.exit("PyAudio is not installed, so microphones can't be listed this way.\n"
-                     "Try:  python -c \"import sounddevice as sd; print(sd.query_devices())\"")
+            sys.exit("PyAudio is not installed, so microphones can't be listed.\n"
+                     "Run:  pip install pyaudio")
         return
 
     listen = build_listener(args.lang, args.mic)

@@ -1,12 +1,11 @@
 """
 Executor: turns the AI's JSON command into a real action.
 SAFE by design: only whitelisted actions/apps run. Nothing from the model is ever run as text.
-Works on Windows and Linux.
+Windows-only build.
 """
 import os
 import re
 import subprocess
-import sys
 import webbrowser
 from functools import lru_cache
 from pathlib import Path
@@ -14,18 +13,13 @@ from urllib.parse import quote_plus
 
 from ai.apps import APPS as _APPS, BROWSER_NAMES
 
-IS_WIN = sys.platform.startswith("win")
-
 
 def _spawn(cmd):
     """Start a program fully detached: its output stays out of our terminal,
-    and it keeps running if this program exits (or Ctrl+C is pressed)."""
+    and it keeps running if this program exits (or Ctrl+C is pressed). Windows-only build."""
     kwargs = dict(stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    if IS_WIN:
-        kwargs["creationflags"] = 0x00000008 | 0x00000200 
-        kwargs["close_fds"] = True
-    else:
-        kwargs["start_new_session"] = True
+    kwargs["creationflags"] = 0x00000008 | 0x00000200  # CREATE_NO_WINDOW | CREATE_NO_CONSOLE
+    kwargs["close_fds"] = True
     return subprocess.Popen(cmd, **kwargs)
 
 
@@ -72,7 +66,7 @@ def _shell_open(target: str):
 
 
 def _launch_windows(app: str) -> bool:
-    target, _, keyword = _APPS[app]
+    target, keyword = _APPS[app]
 
     # 1) Discord's own launcher (silent, fully detached)
     if app == "discord":
@@ -104,37 +98,25 @@ def _launch_windows(app: str) -> bool:
     return False
 
 
-def _launch_linux(app: str) -> bool:
-    try:
-        _spawn(_APPS[app][1])
-        return True
-    except (FileNotFoundError, OSError):
-        return False
-
-
 # ---------- browsers ----------
 def _browser_path(browser: str):
-    """Find a browser executable. Returns a path string or None."""
-    import shutil
-    if IS_WIN:
-        pf = os.environ.get("PROGRAMFILES", r"C:\Program Files")
-        pf86 = os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)")
-        local = os.environ.get("LOCALAPPDATA", "")
-        candidates = {
-            "chrome": [pf + r"\Google\Chrome\Application\chrome.exe",
-                       pf86 + r"\Google\Chrome\Application\chrome.exe",
-                       local + r"\Google\Chrome\Application\chrome.exe"],
-            "edge": [pf86 + r"\Microsoft\Edge\Application\msedge.exe",
-                     pf + r"\Microsoft\Edge\Application\msedge.exe"],
-            "firefox": [pf + r"\Mozilla Firefox\firefox.exe",
-                        pf86 + r"\Mozilla Firefox\firefox.exe"],
-        }
-        for c in candidates.get(browser, []):
-            if os.path.exists(c):
-                return c
-        return None
-    names = {"chrome": "google-chrome", "edge": "microsoft-edge", "firefox": "firefox"}
-    return shutil.which(names.get(browser, ""))
+    """Find a browser executable on Windows. Returns a path string or None."""
+    pf = os.environ.get("PROGRAMFILES", r"C:\Program Files")
+    pf86 = os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)")
+    local = os.environ.get("LOCALAPPDATA", "")
+    candidates = {
+        "chrome": [pf + r"\Google\Chrome\Application\chrome.exe",
+                   pf86 + r"\Google\Chrome\Application\chrome.exe",
+                   local + r"\Google\Chrome\Application\chrome.exe"],
+        "edge": [pf86 + r"\Microsoft\Edge\Application\msedge.exe",
+                 pf + r"\Microsoft\Edge\Application\msedge.exe"],
+        "firefox": [pf + r"\Mozilla Firefox\firefox.exe",
+                    pf86 + r"\Mozilla Firefox\firefox.exe"],
+    }
+    for c in candidates.get(browser, []):
+        if os.path.exists(c):
+            return c
+    return None
 
 
 def _open_url(url: str, browser=None) -> str:
@@ -173,10 +155,7 @@ def _clean_name(name: str) -> str:
 
 
 def _open_path(path: Path):
-    if IS_WIN:
-        os.startfile(str(path))
-    else:
-        _spawn(["xdg-open", str(path)])
+    os.startfile(str(path))
 
 
 def _press_volume_key(vk: int, times: int = 5):
@@ -187,17 +166,10 @@ def _press_volume_key(vk: int, times: int = 5):
 
 
 def _volume(direction: str):
-    if IS_WIN:
-        if direction == "mute":
-            _press_volume_key(0xAD, 1)
-        else:
-            _press_volume_key(0xAF if direction == "up" else 0xAE, 5)  # 5 presses ~ 10%
+    if direction == "mute":
+        _press_volume_key(0xAD, 1)
     else:
-        if direction == "mute":
-            _spawn(["pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle"])
-        else:
-            sign = "+" if direction == "up" else "-"
-            _spawn(["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{sign}10%"])
+        _press_volume_key(0xAF if direction == "up" else 0xAE, 5)  # 5 presses ~ 10%
 
 
 def execute(cmd: dict, confirm=input) -> str:
@@ -208,7 +180,7 @@ def execute(cmd: dict, confirm=input) -> str:
         app = cmd.get("app")
         if app not in _APPS:
             return f"❌ Unknown app: {app}"
-        ok = _launch_windows(app) if IS_WIN else _launch_linux(app)
+        ok = _launch_windows(app)
         return f"✅ Opening {app}" if ok else f"❌ Could not open {app} (is it installed?)"
 
     if action == "web_search":
@@ -255,10 +227,7 @@ def execute(cmd: dict, confirm=input) -> str:
     if action == "shutdown":
         if confirm("⚠️ Shut down the computer? (y/n): ").strip().lower() != "y":
             return "Cancelled"
-        if IS_WIN:
-            _spawn(["shutdown", "/s", "/t", "15"])
-            return "⏻ Shutting down in 15s (cancel with: shutdown /a)"
-        _spawn(["systemctl", "poweroff"])
-        return "⏻ Shutting down"
+        _spawn(["shutdown", "/s", "/t", "15"])
+        return "⏻ Shutting down in 15s (cancel with: shutdown /a)"
 
     return "🤷 Didn't understand / unsupported command"

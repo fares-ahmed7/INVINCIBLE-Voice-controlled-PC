@@ -3,7 +3,7 @@ Shared command contract (JSON) between the AI module and the Command Manager.
 
 Anyone who adds a new action/app MUST update it here, and then:
   - the SYSTEM_PROMPT in command_parser.py (add an example)
-  - the executor mapping (Ubuntu side)
+  - the executor mapping in executor.py
   - tests/test_cases.json
 """
 from typing import Literal, Optional

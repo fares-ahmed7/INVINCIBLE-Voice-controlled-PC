@@ -3,8 +3,7 @@ AI / NLP module (INVINCIBLE)
 
     understand_command("افتح كروم")  ->  {"action": "open_app", "app": "chrome", "name": None}
 
-This module has NO dependency on Ubuntu: it only talks to a local Ollama server,
-so it runs the same on Windows, Linux or macOS.
+This module only talks to a local Ollama server, so it has no OS-specific code.
 
 Config (environment variables, all optional):
     INVINCIBLE_MODEL   model name            (default: qwen3:4b)
@@ -35,7 +34,7 @@ VOLUME_DOWN_PHRASES = (
     "turn down the volume", "volume down", "lower the volume",
 )
 
-SYSTEM_PROMPT = """You are the command parser of a voice-controlled Ubuntu system.
+SYSTEM_PROMPT = """You are the command parser of a voice-controlled Windows PC.
 The user speaks Arabic or English (sometimes mixed). The text comes from speech recognition,
 so it may contain mistakes, and English app names may be written in Arabic letters
 (e.g. "كروم" = chrome, "كالكيوليتور" = calculator).

@@ -13,7 +13,7 @@
    ▼  ✅ بيفتح Edge على بحث جوجل
 ```
 
-شغّال على **Windows** و**Linux (Ubuntu)**.
+شغّال على **Windows** بس.
 
 ---
 
@@ -21,7 +21,6 @@
 
 ```powershell
 # 1) ثبّت Ollama:  https://ollama.com/download
-#    Ubuntu:       curl -fsSL https://ollama.com/install.sh | sh
 
 # 2) نزّل الموديل (حوالي 2.5GB، مرة واحدة)
 ollama pull qwen3:4b
@@ -30,7 +29,6 @@ ollama pull qwen3:4b
 python -m venv venv
 .\venv\Scripts\Activate.ps1      # Windows PowerShell
 # venv\Scripts\activate.bat      # Windows cmd
-# source venv/bin/activate       # Ubuntu
 pip install -r requirements.txt
 
 # 4) شغّل
@@ -88,8 +86,7 @@ python main.py --voice --mic 1            # اختار ميكروفون
 ```
 
 - محتاج **نت** (الـ STT بتاع Google).
-- لو PyAudio مش متثبت بيستخدم `sounddevice` ويشتغل بوضع "اضغط Enter وتكلم 5 ثواني".
-- Ubuntu: `sudo apt install portaudio19-dev flac` ثم `pip install pyaudio`.
+- محتاج **PyAudio** للميكروفون: `pip install pyaudio`.
 
 ---
 
@@ -113,7 +110,7 @@ ai/
   schema.py          # شكل الـ JSON (العقد بين الموديولات) ← اقراه الأول
   apps.py            # قايمة التطبيقات ← هنا بس بتضيف تطبيق جديد
   command_parser.py  # understand_command() + الـ prompt + التحقق من ردّ الموديل
-executor.py          # بينفّذ الأمر فعلًا (Windows + Linux)
+executor.py          # بينفّذ الأمر فعلًا (Windows)
 main.py              # الصوت/الكتابة → AI → التنفيذ  (ده اللي بتشغّله)
 voice_demo.py        # الميكروفون + STT وطباعة النص/الـ JSON بس
 tests/
@@ -127,8 +124,8 @@ tests/
 
 **تطبيق جديد**: سطر واحد في `ai/apps.py`:
 ```python
-#            Windows target      Linux command   Start-Menu keyword
-"notepadpp": ("notepad++",       ["notepad++"],  "notepad++"),
+#            Windows target   Start-Menu keyword
+"notepadpp": ("notepad++.exe", "notepad++"),
 ```
 الـ target بيكون اسم exe مسجّل في Windows، أو رابط زي `discord:`.
 لو فشل، الكود بيدوّر على اختصار بالكلمة دي في قايمة Start.
@@ -179,8 +176,7 @@ print(execute(cmd))   # "✅ Opening chrome"
 ## حالة المشروع
 
 - ✅ الفهم (AI)، الصوت المخلوط، وكل الأوامر في الجدول فوق.
-- ⚠️ جزء Linux في الـ Executor مكتوب بس **محتاج تجربة على Ubuntu حقيقي** (الأوامر في `ai/apps.py` عمودها التاني، و`pactl` للصوت).
-- 💡 مقترحات: أمر "اقفل التطبيق"، فتح أي تطبيق متثبت من قايمة Start تلقائيًا.
+- 💡 مقترحات: أمر "اقفل التطبيق".
 
 ## Git
 
